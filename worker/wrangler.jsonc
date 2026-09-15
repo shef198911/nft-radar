@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nft-radar",
+  "main": "src/index.js",
+  "compatibility_date": "2024-02-08",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nft-radar-db",
+      "database_id": "a26c8371-c1ec-4257-b68e-98221c7ca192"
+    }
+  ]
+}

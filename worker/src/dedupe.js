@@ -1,0 +1,27 @@
+export async function checkDuplicate(db, tweet_id) {
+  const existing = await db.prepare('SELECT id FROM tweets WHERE tweet_id = ?').bind(tweet_id).first();
+  return existing !== null;
+}
+
+export async function saveTweet(db, data) {
+  const detected_at = new Date().toISOString();
+  await db.prepare(`
+    INSERT INTO tweets (
+      tweet_id, tweet_url, username, display_name, text,
+      detected_at, score, priority, project_key, chain,
+      mint_type, opportunity_type, mint_time_raw, supply, price,
+      is_free, is_whitelist, is_allowlist, is_fcfs, is_gtd, is_robinhood
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    data.tweet_id, data.tweet_url, data.username, data.display_name, data.text,
+    detected_at, data.score, data.priority, data.username, data.chain,
+    data.mint_type, data.opportunity_type, data.mint_time_raw, data.supply, data.price,
+    data.is_free, data.is_whitelist, data.is_allowlist, data.is_fcfs, data.is_gtd, data.is_robinhood
+  ).run();
+}
+
+export async function markSent(db, tweet_id, message_id) {
+  await db.prepare('UPDATE tweets SET sent_to_telegram = 1, telegram_message_id = ? WHERE tweet_id = ?')
+    .bind(String(message_id), tweet_id)
+    .run();
+}

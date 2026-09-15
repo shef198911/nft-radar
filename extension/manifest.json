@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "NFT Radar",
+  "version": "1.0",
+  "description": "Automated NFT opportunity search for X",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["*://x.com/*", "*://twitter.com/*"],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://x.com/*", "*://twitter.com/*"],
+      "js": ["queries.js", "filters.js", "tweet-parser.js", "content.js", "search-controller.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "settings.html",
+    "open_in_tab": true
+  }
+}
