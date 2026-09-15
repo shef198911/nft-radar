@@ -11,8 +11,7 @@
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["*://x.com/*", "*://twitter.com/*"],
   "background": {
-    "service_worker": "service-worker.js",
-    "type": "module"
+    "service_worker": "service-worker.js"
   },
   "content_scripts": [
     {
