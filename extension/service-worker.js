@@ -3,7 +3,8 @@ importScripts('queries.js');
 let state = {
   isRunning: false,
   currentQueryIndex: 0,
-  activeTabId: null
+  activeTabId: null,
+  scannerGeneration: 0
 };
 
 let settings = {
@@ -39,6 +40,8 @@ chrome.storage.local.get(['state', 'settings', 'queue'], (res) => {
     state = res.state;
     if (state.isRunning) {
        logInfo('Restored running state');
+       state.scannerGeneration = Date.now();
+       saveState();
        checkTabAndResume();
     }
   }
@@ -49,25 +52,34 @@ async function saveState() {
 }
 
 function checkTabAndResume() {
+   const gen = state.scannerGeneration;
    if (state.activeTabId) {
       chrome.tabs.get(state.activeTabId, (tab) => {
          if (chrome.runtime.lastError || !tab) {
             state.activeTabId = null;
-            saveState();
+            executeNextQuery(gen);
+         } else {
+            executeNextQuery(gen, true); 
          }
       });
+   } else {
+      executeNextQuery(gen);
    }
 }
 
 async function processQueue() {
   if (sending || tweetQueue.length === 0 || !settings.workerUrl || !settings.clientKey) return;
   
+  const pendingItems = tweetQueue.filter(i => i.status !== 'failed');
+  if (pendingItems.length === 0) return;
+  
   sending = true;
-  const item = tweetQueue[0];
+  const item = pendingItems[0];
   
   if (item.retryCount === undefined) {
      item.retryCount = 0;
      item.nextRetry = Date.now();
+     item.status = 'pending';
   }
 
   if (Date.now() < item.nextRetry) {
@@ -91,17 +103,21 @@ async function processQueue() {
       body: JSON.stringify(tweet)
     });
     
-    if (response.ok) {
-      logInfo(`Worker response 200 for ${tweet.tweet_id}`);
-      tweetQueue.shift();
+    if (response.ok || response.status === 409) {
+      if (response.ok) logInfo(`Worker response 200 for ${tweet.tweet_id}`);
+      else logInfo(`Duplicate ${tweet.tweet_id}, dropping from queue`);
+      
+      const idx = tweetQueue.indexOf(item);
+      if (idx !== -1) tweetQueue.splice(idx, 1);
       await saveState();
-    } else if (response.status === 409) {
-      logInfo(`Duplicate ${tweet.tweet_id}, dropping`);
-      tweetQueue.shift();
+    } else if (response.status === 400) {
+      logError(`Worker rejected payload 400 for ${tweet.tweet_id}`);
+      const idx = tweetQueue.indexOf(item);
+      if (idx !== -1) tweetQueue.splice(idx, 1);
       await saveState();
-    } else if (response.status === 400 || response.status === 401 || response.status === 403) {
-      logError(`Worker rejected payload (${response.status})`);
-      tweetQueue.shift();
+    } else if (response.status === 401 || response.status === 403) {
+      logError(`Worker auth error ${response.status}. Check client key.`);
+      item.nextRetry = Date.now() + 60000;
       await saveState();
     } else {
       throw new Error(`HTTP ${response.status}`);
@@ -110,8 +126,8 @@ async function processQueue() {
     logError(`Worker connection error: ${error.message}`);
     item.retryCount++;
     if (item.retryCount >= 5) {
-       logError(`Max retries reached for ${tweet.tweet_id}, dropping.`);
-       tweetQueue.shift();
+       logError(`Max retries reached for ${tweet.tweet_id}, marking failed.`);
+       item.status = 'failed';
     } else {
        const delays = [2000, 5000, 15000, 30000, 60000];
        const waitTime = delays[item.retryCount - 1] || 60000;
@@ -121,9 +137,7 @@ async function processQueue() {
   }
   
   sending = false;
-  if (tweetQueue.length > 0) {
-    setTimeout(processQueue, 2000);
-  }
+  setTimeout(processQueue, 2000);
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -132,7 +146,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     chrome.storage.local.get(['processed_' + tweetId], (res) => {
       if (!res['processed_' + tweetId]) {
         chrome.storage.local.set({ ['processed_' + tweetId]: true });
-        tweetQueue.push({ payload: msg.payload, retryCount: 0, nextRetry: Date.now() });
+        tweetQueue.push({ payload: msg.payload, retryCount: 0, nextRetry: Date.now(), status: 'pending' });
         saveState();
         processQueue();
       }
@@ -140,13 +154,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   
   if (msg.type === 'START_OBSERVER_PROXY') {
-    if (state.activeTabId) chrome.tabs.sendMessage(state.activeTabId, { type: 'START_OBSERVER' });
+    if (state.activeTabId) chrome.tabs.sendMessage(state.activeTabId, { type: 'START_OBSERVER' }).catch(()=>null);
   }
 
   if (msg.type === 'CHECK_NEW_TWEETS_PROXY') {
     if (state.activeTabId) {
         chrome.tabs.sendMessage(state.activeTabId, { type: 'CHECK_NEW_TWEETS' }, (resp) => {
-            sendResponse(resp);
+            sendResponse(resp || { newCount: 0 });
         });
         return true;
     } else {
@@ -155,6 +169,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === 'SCROLL_DONE') {
+    const gen = msg.generation;
+    if (gen !== state.scannerGeneration || !state.isRunning) return;
+    
     logInfo('Query complete');
     state.currentQueryIndex++;
     saveState();
@@ -164,11 +181,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
        saveState();
        logInfo(`Cycle complete. Waiting ${settings.scanInterval} minutes...`);
        setTimeout(() => {
-         if (state.isRunning) executeNextQuery();
+         if (state.isRunning && gen === state.scannerGeneration) executeNextQuery(gen);
        }, settings.scanInterval * 60 * 1000);
     } else {
        setTimeout(() => {
-         if (state.isRunning) executeNextQuery();
+         if (state.isRunning && gen === state.scannerGeneration) executeNextQuery(gen);
        }, 2000);
     }
   }
@@ -196,37 +213,43 @@ function createTab(url, cb) {
   });
 }
 
-function executeNextQuery() {
-  if (!state.isRunning || queriesList.length === 0) return;
+function executeNextQuery(gen, resume = false) {
+  if (!state.isRunning || queriesList.length === 0 || gen !== state.scannerGeneration) return;
   
   const query = queriesList[state.currentQueryIndex];
   logInfo(`Query ${state.currentQueryIndex + 1}/${queriesList.length}: ${query}`);
+  
   const encodedQuery = encodeURIComponent(query);
   const searchUrl = `https://x.com/search?q=${encodedQuery}&src=typed_query&f=live`;
   
   navigateTab(searchUrl, (tab) => {
      setTimeout(() => {
-        if (state.isRunning) {
-           chrome.tabs.sendMessage(state.activeTabId, { type: 'START_SCROLL', maxScrolls: settings.maxScrolls });
+        if (state.isRunning && gen === state.scannerGeneration) {
+           chrome.tabs.sendMessage(state.activeTabId, { 
+              type: 'START_SCROLL', 
+              maxScrolls: settings.maxScrolls,
+              generation: gen
+           }).catch(()=>null);
         }
-     }, 5000);
+     }, 6000);
   });
 }
 
 function startScanner() {
   if (state.isRunning) {
-     logInfo('Already running');
-     return;
+     logInfo('Restarting loop strictly.');
   }
   logInfo('Starting RADAR');
   state.isRunning = true;
+  state.scannerGeneration = Date.now();
   saveState();
-  executeNextQuery();
+  executeNextQuery(state.scannerGeneration);
 }
 
 function stopScanner() {
   logInfo('Stopping RADAR');
   state.isRunning = false;
+  state.scannerGeneration = 0; 
   saveState();
   if (state.activeTabId) {
      chrome.tabs.sendMessage(state.activeTabId, { type: 'STOP_SCROLL' }).catch(()=>null);

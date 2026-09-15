@@ -6,7 +6,6 @@ let newTweetsInCurrentScroll = 0;
 
 function processTweets() {
   const articles = document.querySelectorAll('article[data-testid="tweet"]');
-  let foundNew = false;
   
   articles.forEach(article => {
     const data = window.extractTweetData(article);
@@ -18,28 +17,28 @@ function processTweets() {
     }
     
     processedTweetIds.add(data.tweet_id);
-    foundNew = true;
-    newTweetsInCurrentScroll++;
+    newTweetsInCurrentScroll++; // Increment ONLY on actually new IDs to DOM
     
     if (window.passesLocalFilter(data.text)) {
       console.log(`[RADAR] Found relevant tweet: ${data.tweet_id}`);
       chrome.runtime.sendMessage({ type: 'NEW_TWEET', payload: data });
     }
   });
-  return foundNew;
 }
 
 function startObserver() {
-  if (observer) return;
-  console.log('[RADAR] Starting Observer');
   newTweetsInCurrentScroll = 0;
-  processTweets();
   
-  observer = new MutationObserver((mutations) => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(processTweets, 300);
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
+  if (!observer) {
+      console.log('[RADAR] Starting Observer');
+      observer = new MutationObserver((mutations) => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(processTweets, 300);
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+  }
+  
+  processTweets();
 }
 
 function stopObserver() {
@@ -55,6 +54,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'STOP_OBSERVER') stopObserver();
   if (msg.type === 'CHECK_NEW_TWEETS') {
      sendResponse({ newCount: newTweetsInCurrentScroll });
-     newTweetsInCurrentScroll = 0;
+     newTweetsInCurrentScroll = 0; 
   }
 });

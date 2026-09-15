@@ -2,6 +2,7 @@ let isRunning = false;
 let maxScrolls = 5;
 let scrolls = 0;
 let noNewTweetAttempts = 0;
+let currentGeneration = 0;
 const MAX_NO_NEW_TWEETS_ATTEMPTS = 3;
 
 async function doScroll() {
@@ -36,8 +37,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     scrolls = 0;
     noNewTweetAttempts = 0;
     maxScrolls = msg.maxScrolls || 5;
+    currentGeneration = msg.generation;
     
     console.log('[RADAR] Started scroll loop');
+    
     chrome.runtime.sendMessage({ type: 'START_OBSERVER_PROXY' });
     
     (async function loop() {
@@ -47,7 +50,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       } else {
         if (isRunning) {
           console.log('[RADAR] Scroll done for current query');
-          chrome.runtime.sendMessage({ type: 'SCROLL_DONE' });
+          chrome.runtime.sendMessage({ type: 'SCROLL_DONE', generation: currentGeneration });
+          isRunning = false;
         }
       }
     })();

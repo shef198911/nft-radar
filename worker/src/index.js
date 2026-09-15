@@ -23,8 +23,8 @@ router.get('/health', async (request, env) => {
 router.get('/stats', async (request, env) => {
   try {
     const total = await env.DB.prepare("SELECT COUNT(*) as count FROM tweets").first();
-    const today = await env.DB.prepare("SELECT COUNT(*) as count FROM tweets WHERE date(created_at) = date('now')").first();
-    const sent = await env.DB.prepare("SELECT COUNT(*) as count FROM tweets WHERE sent_to_telegram = 1 AND date(created_at) = date('now')").first();
+    const today = await env.DB.prepare("SELECT COUNT(*) as count FROM tweets WHERE date(detected_at) = date('now')").first();
+    const sent = await env.DB.prepare("SELECT COUNT(*) as count FROM tweets WHERE sent_to_telegram = 1 AND date(detected_at) = date('now')").first();
     
     return new Response(JSON.stringify({
       tweets_total: total ? total.count : 0,
@@ -58,6 +58,11 @@ router.post('/ingest', async (request, env) => {
   if (typeof payload.tweet_id !== 'string' || typeof payload.tweet_url !== 'string' || typeof payload.text !== 'string') {
     return new Response('Missing or invalid required fields', { status: 400 });
   }
+  
+  if (!payload.tweet_url.includes('x.com/') && !payload.tweet_url.includes('twitter.com/')) {
+    return new Response('Invalid tweet URL', { status: 400 });
+  }
+  
   if (payload.text.length > 50000) return new Response('Text too long', { status: 400 });
   
   const existing = await checkDuplicate(env.DB, payload.tweet_id);

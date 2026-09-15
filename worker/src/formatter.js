@@ -41,8 +41,10 @@ export function formatTelegramMessage(data) {
     msg += `<b>🎯 Type:</b>\n${escapeHTML(data.opportunity_type)}\n\n`;
   }
   
-  if (data.price) {
+  if (data.price && data.price !== 'FREE') {
     msg += `<b>💰 Price:</b>\n${escapeHTML(data.price)}\n\n`;
+  } else if (data.price === 'FREE') {
+    msg += `<b>💰 Price:</b>\nFREE\n\n`;
   }
   
   if (data.mint_time_raw) {
@@ -54,11 +56,6 @@ export function formatTelegramMessage(data) {
   }
   
   msg += `<b>⭐ Score:</b>\n${data.score}/100\n\n`;
-  
-  let snippet = data.text.substring(0, 150).replace(/\n/g, ' ');
-  if (data.text.length > 150) snippet += '...';
-  msg += `<b>📝 Details:</b>\n<i>${escapeHTML(snippet)}</i>\n\n`;
-  
   msg += `<a href="${data.tweet_url}">🔗 Original tweet</a>`;
   
   return msg;

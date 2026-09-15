@@ -8,8 +8,8 @@ export function parseTweet(payload) {
   if (lower.includes('allowlist') || lower.includes('allow list')) is_allowlist = 1;
   
   if (lower.includes('free mint') || lower.includes('0 eth') || lower.includes('zero eth') || lower.includes('no cost') || lower.includes('free to mint')) is_free = 1;
-  if (lower.includes('fcfs') || lower.includes('first come')) is_fcfs = 1;
-  if (lower.includes('gtd') || lower.includes('guaranteed')) is_gtd = 1;
+  if (/\bfcfs\b/i.test(text) || lower.includes('first come')) is_fcfs = 1;
+  if (/\bgtd\b/i.test(text) || lower.includes('guaranteed')) is_gtd = 1;
   
   let chain = 'Unknown';
   if (lower.includes('robinhood chain') || lower.includes('rh chain') || lower.includes('robinhoodchain')) {
@@ -67,6 +67,10 @@ export function parseTweet(payload) {
   const dateRawMatch = text.match(/(?:mint|starts?|live|opening)\s*(?:on|at|:|=>)?\s*([a-zA-Z]{3,9}\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?\s*(?:at\s*\d{1,2}:\d{2}\s*(?:AM|PM|UTC|EST|PST)?)?)/i);
   if (dateRawMatch) {
      mint_time_raw = dateRawMatch[1].trim();
+     const d = new Date(mint_time_raw);
+     if (!isNaN(d.getTime()) && mint_time_raw.match(/\d{4}/)) {
+        mint_date = d.toISOString().split('T')[0];
+     }
   } else if (lower.includes('tomorrow')) {
      mint_time_raw = 'tomorrow';
   } else if (lower.includes('soon')) {
@@ -76,17 +80,23 @@ export function parseTweet(payload) {
   }
 
   let project_name = null;
-  if (payload.display_name && !payload.display_name.includes('...')) {
-     project_name = payload.display_name; 
+  if (payload.display_name && (/\b(nft|collection|studio|labs)\b/i.test(payload.display_name) || payload.is_verified)) {
+     project_name = payload.display_name;
+  }
+  
+  const nameMatch = text.match(/([A-Z][a-zA-Z0-9]+\s*){1,3}(NFT|Collection|Mint)/);
+  if (nameMatch) {
+     project_name = nameMatch[0].replace(/\b(NFT|Collection|Mint)\b/i, '').trim();
   }
 
   let official_link = false;
   let mint_link = false;
   const links = payload.links || [];
   links.forEach(l => {
-     if (l.includes('discord.gg') || l.includes('t.me')) return;
-     if (l.includes('mint') || l.includes('claim')) mint_link = true;
-     if (payload.username && l.toLowerCase().includes(payload.username.toLowerCase())) official_link = true;
+     const lowerUrl = l.toLowerCase();
+     if (lowerUrl.includes('discord.gg') || lowerUrl.includes('t.me')) return;
+     if (lowerUrl.includes('/mint') || lowerUrl.includes('/claim') || lowerUrl.includes('mint.')) mint_link = true;
+     if (payload.username && lowerUrl.includes(payload.username.toLowerCase())) official_link = true;
   });
 
   return {

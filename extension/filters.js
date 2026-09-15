@@ -2,20 +2,20 @@ function passesLocalFilter(text) {
   if (!text) return false;
   const lowerText = text.toLowerCase();
   
-  const hasNFT = lowerText.includes('nft');
-  const hasRobinhood = lowerText.includes('robinhood');
-  const hasMint = lowerText.includes('mint') || lowerText.includes('drop') || lowerText.includes('launch') || lowerText.includes('upcoming');
-  const hasFree = lowerText.includes('free') || lowerText.includes('0 eth');
+  const isNFT = /\bnfts?\b/i.test(text);
+  const isRobinhood = /\brobinhood\b/i.test(text);
   
   const hasWhitelist = lowerText.includes('whitelist') || /\bwl\b/i.test(text) || lowerText.includes('allowlist') || lowerText.includes('allow list');
-  const hasFcfs = lowerText.includes('fcfs') || lowerText.includes('gtd') || lowerText.includes('guaranteed');
-  const hasCollection = lowerText.includes('collection');
+  const hasFcfs = /\bfcfs\b/i.test(text) || /\bgtd\b/i.test(text) || lowerText.includes('guaranteed');
+  const hasFree = lowerText.includes('free') || lowerText.includes('0 eth');
   
-  const isOpportunity = hasMint || hasWhitelist || hasFree || hasFcfs || hasCollection;
+  const isOpportunity = /\b(mint|drop|launch|upcoming|collection)\b/i.test(text) || hasWhitelist || hasFcfs;
   
-  const isRobinhoodOpportunity = hasRobinhood && isOpportunity;
-  const isGeneralOpportunity = hasNFT && isOpportunity;
+  const hasFreeMintContext = hasFree && (isNFT || isOpportunity || isRobinhood);
+  const isValidSignal = isOpportunity || hasFreeMintContext;
   
-  return isRobinhoodOpportunity || isGeneralOpportunity;
+  if (!isValidSignal) return false;
+  
+  return isRobinhood || isNFT;
 }
 if (typeof window !== 'undefined') window.passesLocalFilter = passesLocalFilter;

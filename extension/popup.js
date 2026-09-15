@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusText = document.getElementById('status-text');
   const statusDot = document.getElementById('status-dot');
   const queueCount = document.getElementById('queue-count');
+  const failedCount = document.getElementById('failed-count');
   const queryText = document.getElementById('current-query');
 
   function refreshData() {
@@ -17,7 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
         statusText.innerText = 'STOPPED';
         statusDot.className = 'status-dot stopped';
       }
-      queueCount.innerText = res.queue ? res.queue.length : 0;
+      queueCount.innerText = res.queue ? res.queue.filter(q => q.status !== 'failed').length : 0;
+      failedCount.innerText = res.queue ? res.queue.filter(q => q.status === 'failed').length : 0;
       queryText.innerText = `Query ${res.state.currentQueryIndex + 1}/${res.queriesLength}`;
     });
   }
