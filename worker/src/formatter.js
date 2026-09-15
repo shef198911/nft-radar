@@ -31,7 +31,9 @@ export function formatTelegramMessage(data) {
   
   const types = [];
   if (data.is_free) types.push('Free Mint');
-  if (data.is_whitelist || data.is_allowlist) types.push('Whitelist');
+  if (data.is_wl_giveaway) types.push('Whitelist Giveaway');
+  else if (data.is_wl_raffle) types.push('Whitelist Raffle');
+  else if (data.is_whitelist || data.is_allowlist) types.push('Whitelist');
   if (data.is_fcfs) types.push('FCFS');
   if (data.is_gtd) types.push('GTD');
   
@@ -39,6 +41,10 @@ export function formatTelegramMessage(data) {
     msg += `<b>🎯 Type:</b>\n${types.join(' + ')}\n\n`;
   } else if (data.opportunity_type && data.opportunity_type !== 'UNKNOWN') {
     msg += `<b>🎯 Type:</b>\n${escapeHTML(data.opportunity_type)}\n\n`;
+  }
+  
+  if (data.wl_spots) {
+    msg += `<b>👥 WL spots:</b>\n${data.wl_spots}\n\n`;
   }
   
   if (data.price && data.price !== 'FREE') {
@@ -53,6 +59,10 @@ export function formatTelegramMessage(data) {
   
   if (data.supply) {
     msg += `<b>👥 Supply:</b>\n${data.supply}\n\n`;
+  }
+  
+  if (data.moni_score !== null && data.moni_score !== undefined) {
+    msg += `<b>💰 Moni Score:</b>\n${data.moni_score.toLocaleString()}\n\n`;
   }
   
   msg += `<b>⭐ Score:</b>\n${data.score}/100\n\n`;

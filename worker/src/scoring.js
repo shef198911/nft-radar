@@ -16,9 +16,12 @@ export function calculateScore(parsed) {
   if (parsed.mint_time_raw && parsed.mint_time_raw !== 'soon' && parsed.mint_time_raw !== 'live' && parsed.mint_time_raw !== 'tomorrow') score += 5;
   if (parsed.has_mint_link) score += 5;
 
-  if (lower.includes('giveaway') || lower.includes('give away')) score -= 10;
-  if (lower.includes('rt to win') || lower.includes('retweet to win')) score -= 10;
-  if (lower.includes('follow to win')) score -= 10;
+  if (!parsed.is_wl_giveaway && !parsed.is_wl_raffle) {
+    if (parsed.is_giveaway) score -= 10;
+    if (lower.includes('rt to win') || lower.includes('retweet to win')) score -= 10;
+    if (lower.includes('follow to win')) score -= 10;
+  }
+  
   if (lower.includes('send eth') || lower.includes('send crypto')) score -= 30;
   if (lower.includes('dm for link') || lower.includes('dm me')) score -= 15;
   if (lower.includes('connect wallet')) score -= 10;

@@ -17,7 +17,7 @@
   "content_scripts": [
     {
       "matches": ["*://x.com/*", "*://twitter.com/*"],
-      "js": ["queries.js", "filters.js", "tweet-parser.js", "content.js", "search-controller.js"],
+      "js": ["queries.js", "filters.js", "moni-score.js", "tweet-parser.js", "content.js", "search-controller.js"],
       "run_at": "document_idle"
     }
   ],

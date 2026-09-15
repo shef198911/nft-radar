@@ -7,9 +7,25 @@ export function parseTweet(payload) {
   if (/\bwl\b/i.test(text) || lower.includes('whitelist') || lower.includes('white list')) is_whitelist = 1;
   if (lower.includes('allowlist') || lower.includes('allow list')) is_allowlist = 1;
   
-  if (lower.includes('free mint') || lower.includes('0 eth') || lower.includes('zero eth') || lower.includes('no cost') || lower.includes('free to mint')) is_free = 1;
+  if (lower.includes('free mint') || lower.includes('0 eth') || lower.includes('zero eth') || lower.includes('no cost') || lower.includes('free to mint') || lower.includes('free whitelist') || lower.includes('free wl')) is_free = 1;
   if (/\bfcfs\b/i.test(text) || lower.includes('first come')) is_fcfs = 1;
   if (/\bgtd\b/i.test(text) || lower.includes('guaranteed')) is_gtd = 1;
+
+  let is_giveaway = lower.includes('giveaway') || lower.includes('give away') ? 1 : 0;
+  let is_raffle = lower.includes('raffle') ? 1 : 0;
+  
+  let is_wl_giveaway = (is_whitelist || is_allowlist) && is_giveaway ? 1 : 0;
+  let is_wl_raffle = (is_whitelist || is_allowlist) && is_raffle ? 1 : 0;
+  
+  let wl_spots = null;
+  const spotsMatch = lower.match(/(\d+)\s*(?:x\s*)?(?:wl|whitelist|allowlist|gtd wl|fcfs wl)\s*(?:spots?|winners?)/i) ||
+                     lower.match(/giving\s*away\s*(\d+)\s*(?:wl|whitelist|allowlist)/i) ||
+                     lower.match(/raffle\s*for\s*(\d+)\s*(?:wl|whitelist|allowlist)/i) ||
+                     lower.match(/(\d+)\s*(?:gtd|fcfs)\s*wl/i);
+  if (spotsMatch) {
+    wl_spots = parseInt(spotsMatch[1], 10);
+    if (isNaN(wl_spots)) wl_spots = null;
+  }
   
   let chain = 'Unknown';
   if (lower.includes('robinhood chain') || lower.includes('rh chain') || lower.includes('robinhoodchain')) {
@@ -35,7 +51,8 @@ export function parseTweet(payload) {
   let mint_type = is_free ? 'FREE_MINT' : (lower.includes('mint') ? 'PAID_MINT' : 'UNKNOWN');
   
   let opportunity_type = 'UNKNOWN';
-  if (is_free) opportunity_type = 'FREE_MINT';
+  if (is_wl_giveaway || is_wl_raffle) opportunity_type = 'WL_GIVEAWAY';
+  else if (is_free) opportunity_type = 'FREE_MINT';
   else if (is_whitelist) opportunity_type = 'WHITELIST';
   else if (is_allowlist) opportunity_type = 'ALLOWLIST';
   else if (is_fcfs) opportunity_type = 'FCFS';
@@ -64,9 +81,19 @@ export function parseTweet(payload) {
   let mint_time = null;
   let mint_time_raw = null;
   
-  const dateRawMatch = text.match(/(?:mint|starts?|live|opening)\s*(?:on|at|:|=>)?\s*([a-zA-Z]{3,9}\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?\s*(?:at\s*\d{1,2}:\d{2}\s*(?:AM|PM|UTC|EST|PST)?)?)/i);
+  // Stricter date matching
+  const dateRawMatch = text.match(/\b([A-Za-z]{3,9}\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?)\b/i) || 
+                       text.match(/\b(\d{1,2}\s+[A-Za-z]{3,9}(?:,?\s+\d{4})?)\b/i) ||
+                       text.match(/\b(\d{1,2}[\/\.]\d{1,2}[\/\.]\d{4})\b/i);
+                       
+  const timeRawMatch = text.match(/\b(\d{1,2}:\d{2}\s*(?:AM|PM|UTC|EST|PST|CET)?)\b/i) || 
+                       text.match(/\b(\d{1,2}\s*(?:AM|PM)\s*(?:UTC|EST|PST|CET)?)\b/i);
+
   if (dateRawMatch) {
      mint_time_raw = dateRawMatch[1].trim();
+     if (timeRawMatch) {
+       mint_time_raw += ' at ' + timeRawMatch[1].trim();
+     }
      const d = new Date(mint_time_raw);
      if (!isNaN(d.getTime()) && mint_time_raw.match(/\d{4}/)) {
         mint_date = d.toISOString().split('T')[0];
@@ -80,13 +107,12 @@ export function parseTweet(payload) {
   }
 
   let project_name = null;
-  if (payload.display_name && (/\b(nft|collection|studio|labs)\b/i.test(payload.display_name) || payload.is_verified)) {
-     project_name = payload.display_name;
-  }
-  
-  const nameMatch = text.match(/([A-Z][a-zA-Z0-9]+\s*){1,3}(NFT|Collection|Mint)/);
+  const nameMatch = text.match(/([A-Z][a-zA-Z0-9-]+\s*){1,3}(NFT|Collection|Mint)/);
   if (nameMatch) {
      project_name = nameMatch[0].replace(/\b(NFT|Collection|Mint)\b/i, '').trim();
+  } else if (payload.display_name && /\b(nft|collection|studio|labs)\b/i.test(payload.display_name)) {
+     // Only use display name if it EXPLICITLY contains NFT/Labs/Studio. Being verified is NOT enough.
+     project_name = payload.display_name;
   }
 
   let official_link = false;
@@ -95,12 +121,16 @@ export function parseTweet(payload) {
   links.forEach(l => {
      const lowerUrl = l.toLowerCase();
      if (lowerUrl.includes('discord.gg') || lowerUrl.includes('t.me')) return;
-     if (lowerUrl.includes('/mint') || lowerUrl.includes('/claim') || lowerUrl.includes('mint.')) mint_link = true;
-     if (payload.username && lowerUrl.includes(payload.username.toLowerCase())) official_link = true;
+     
+     // Stricter mint link
+     if (lowerUrl.match(/\b(mint|claim)\b/i) && !lowerUrl.includes('status')) mint_link = true;
+     
+     if (payload.username && lowerUrl.includes(payload.username.toLowerCase()) && !lowerUrl.includes('x.com')) official_link = true;
   });
 
   return {
     ...payload,
+    moni_score: payload.moni_score !== undefined ? payload.moni_score : null,
     chain,
     mint_type,
     opportunity_type,
@@ -110,11 +140,16 @@ export function parseTweet(payload) {
     mint_time_raw,
     supply,
     price,
+    wl_spots,
     is_free,
     is_whitelist,
     is_allowlist,
     is_fcfs,
     is_gtd,
+    is_giveaway,
+    is_raffle,
+    is_wl_giveaway,
+    is_wl_raffle,
     is_robinhood,
     is_verified: payload.is_verified || false,
     has_mint_link: mint_link,

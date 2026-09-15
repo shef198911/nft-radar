@@ -12,7 +12,10 @@ let settings = {
   workerUrl: (typeof CONFIG !== 'undefined' ? CONFIG.workerUrl : ''),
   clientKey: (typeof CONFIG !== 'undefined' ? CONFIG.clientKey : ''),
   scanInterval: 10,
-  maxScrolls: 5
+  maxScrolls: 5,
+  moniFilterEnabled: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterEnabled : true),
+  moniFilterMinScore: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterMinScore : 1000),
+  moniFilterIfUnavailable: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterIfUnavailable : 'allow')
 };
 
 let tweetQueue = [];
@@ -222,6 +225,10 @@ function executeNextQuery(gen, resume = false) {
   
   const encodedQuery = encodeURIComponent(query);
   const searchUrl = `https://x.com/search?q=${encodedQuery}&src=typed_query&f=live`;
+  
+  if (state.activeTabId) {
+     chrome.tabs.sendMessage(state.activeTabId, { type: 'STOP_OBSERVER' }).catch(()=>null);
+  }
   
   navigateTab(searchUrl, (tab) => {
      setTimeout(() => {
