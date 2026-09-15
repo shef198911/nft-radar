@@ -188,9 +188,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
          if (state.isRunning && gen === state.scannerGeneration) executeNextQuery(gen);
        }, settings.scanInterval * 60 * 1000);
     } else {
-       setTimeout(() => {
-         if (state.isRunning && gen === state.scannerGeneration) executeNextQuery(gen);
-       }, 2000);
+         // Random delay between 15 and 25 seconds to avoid Twitter rate limit block
+         const delay = 15000 + Math.floor(Math.random() * 10000);
+         logInfo(`Waiting ${Math.round(delay/1000)} seconds before next query...`);
+         setTimeout(() => {
+           if (state.isRunning && gen === state.scannerGeneration) executeNextQuery(gen);
+         }, delay);
     }
   }
 });
