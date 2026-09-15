@@ -8,12 +8,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load existing settings
   chrome.storage.local.get(['settings'], (res) => {
-    if (res.settings) {
-      workerUrlInput.value = res.settings.workerUrl || '';
-      clientKeyInput.value = res.settings.clientKey || '';
-      scanIntervalInput.value = res.settings.scanInterval || 10;
-      maxScrollsInput.value = res.settings.maxScrolls || 5;
-    }
+    let settings = res.settings || {};
+    workerUrlInput.value = settings.workerUrl || (typeof CONFIG !== 'undefined' ? CONFIG.workerUrl : '');
+    clientKeyInput.value = settings.clientKey || (typeof CONFIG !== 'undefined' ? CONFIG.clientKey : '');
+    scanIntervalInput.value = settings.scanInterval || 10;
+    maxScrollsInput.value = settings.maxScrolls || 5;
   });
 
   saveBtn.addEventListener('click', () => {

@@ -1,3 +1,4 @@
+importScripts('config.js');
 importScripts('queries.js');
 
 let state = {
@@ -8,8 +9,8 @@ let state = {
 };
 
 let settings = {
-  workerUrl: '',
-  clientKey: '',
+  workerUrl: (typeof CONFIG !== 'undefined' ? CONFIG.workerUrl : ''),
+  clientKey: (typeof CONFIG !== 'undefined' ? CONFIG.clientKey : ''),
   scanInterval: 10,
   maxScrolls: 5
 };
