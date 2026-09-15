@@ -7,8 +7,15 @@ import { sendTelegramMessage } from './telegram.js';
 
 const router = Router();
 
-router.get('/health', () => {
-  return new Response(JSON.stringify({ status: 'ok', database: 'ok', telegram: 'ok' }), {
+router.get('/health', async (request, env) => {
+  let dbStatus = 'ok';
+  try {
+    await env.DB.prepare("SELECT 1").first();
+  } catch (e) {
+    dbStatus = 'error';
+  }
+  const tgStatus = (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) ? 'configured' : 'not_configured';
+  return new Response(JSON.stringify({ status: 'ok', worker: 'ok', database: dbStatus, telegram: tgStatus }), {
     headers: { 'Content-Type': 'application/json' }
   });
 });
@@ -35,6 +42,11 @@ router.post('/ingest', async (request, env) => {
     return new Response('Unauthorized', { status: 401 });
   }
 
+  const contentLength = request.headers.get('content-length');
+  if (contentLength && parseInt(contentLength, 10) > 102400) { 
+     return new Response('Payload too large', { status: 400 });
+  }
+
   let payload;
   try {
     payload = await request.json();
@@ -42,29 +54,34 @@ router.post('/ingest', async (request, env) => {
     return new Response('Invalid JSON', { status: 400 });
   }
   
-  if (!payload.tweet_id || !payload.tweet_url || !payload.text) {
-    return new Response('Missing required fields', { status: 400 });
+  if (!payload || typeof payload !== 'object') return new Response('Invalid format', { status: 400 });
+  if (typeof payload.tweet_id !== 'string' || typeof payload.tweet_url !== 'string' || typeof payload.text !== 'string') {
+    return new Response('Missing or invalid required fields', { status: 400 });
   }
+  if (payload.text.length > 50000) return new Response('Text too long', { status: 400 });
   
-  // Dedupe check
-  const isDuplicate = await checkDuplicate(env.DB, payload.tweet_id);
-  if (isDuplicate) {
-    return new Response(JSON.stringify({ status: 'duplicate' }), { 
-      status: 409, 
-      headers: { 'Content-Type': 'application/json' } 
-    });
+  const existing = await checkDuplicate(env.DB, payload.tweet_id);
+  if (existing) {
+    if (existing.sent_to_telegram === 0) {
+       const scored = calculateScore(parseTweet(payload));
+       const minScore = parseInt(env.MIN_TELEGRAM_SCORE || '50', 10);
+       if (scored.score >= minScore) {
+           const msg = formatTelegramMessage(scored);
+           if (msg) {
+              const tgRes = await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, msg);
+              if (tgRes.ok) await markSent(env.DB, payload.tweet_id, tgRes.message_id);
+           }
+       }
+       return new Response(JSON.stringify({ status: 'retry_attempted' }), { headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response(JSON.stringify({ status: 'duplicate' }), { status: 409, headers: { 'Content-Type': 'application/json' } });
   }
 
-  // Parse
   const parsed = parseTweet(payload);
-  
-  // Score
   const scored = calculateScore(parsed);
 
-  // Save to DB initially
   await saveTweet(env.DB, scored);
 
-  // Send to Telegram if score >= MIN_TELEGRAM_SCORE (default 50)
   const minScore = parseInt(env.MIN_TELEGRAM_SCORE || '50', 10);
   if (scored.score >= minScore) {
     const message = formatTelegramMessage(scored);

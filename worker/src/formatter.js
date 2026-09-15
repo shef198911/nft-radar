@@ -1,8 +1,10 @@
 function escapeHTML(str) {
   if (!str) return '';
-  return str.replace(/&/g, '&amp;')
+  return String(str)
+            .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
 }
 
 export function formatTelegramMessage(data) {
@@ -32,13 +34,14 @@ export function formatTelegramMessage(data) {
   if (data.is_whitelist || data.is_allowlist) types.push('Whitelist');
   if (data.is_fcfs) types.push('FCFS');
   if (data.is_gtd) types.push('GTD');
+  
   if (types.length > 0) {
     msg += `<b>🎯 Type:</b>\n${types.join(' + ')}\n\n`;
-  } else {
+  } else if (data.opportunity_type && data.opportunity_type !== 'UNKNOWN') {
     msg += `<b>🎯 Type:</b>\n${escapeHTML(data.opportunity_type)}\n\n`;
   }
   
-  if (data.price && data.price !== 'UNKNOWN') {
+  if (data.price) {
     msg += `<b>💰 Price:</b>\n${escapeHTML(data.price)}\n\n`;
   }
   
@@ -52,8 +55,7 @@ export function formatTelegramMessage(data) {
   
   msg += `<b>⭐ Score:</b>\n${data.score}/100\n\n`;
   
-  // Optional details snippet
-  let snippet = data.text.substring(0, 150).replace(/\\n/g, ' ');
+  let snippet = data.text.substring(0, 150).replace(/\n/g, ' ');
   if (data.text.length > 150) snippet += '...';
   msg += `<b>📝 Details:</b>\n<i>${escapeHTML(snippet)}</i>\n\n`;
   
