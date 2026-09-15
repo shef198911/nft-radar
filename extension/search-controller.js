@@ -11,7 +11,8 @@ async function doScroll() {
   window.scrollTo(0, document.body.scrollHeight);
   scrolls++;
   
-  await new Promise(resolve => setTimeout(resolve, 2500));
+  const scrollDelay = 5000 + Math.floor(Math.random() * 3000); // 5-8 seconds random delay
+  await new Promise(resolve => setTimeout(resolve, scrollDelay));
   
   return new Promise(resolve => {
     chrome.runtime.sendMessage({ type: 'CHECK_NEW_TWEETS_PROXY' }, (response) => {

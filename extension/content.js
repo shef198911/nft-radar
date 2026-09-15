@@ -4,6 +4,14 @@ const MAX_PROCESSED_IDS = 10000;
 let debounceTimer = null;
 let newTweetsInCurrentScroll = 0;
 
+function updateStats(key) {
+   chrome.storage.local.get(['radarStats'], (res) => {
+      let stats = res.radarStats || { tweetsSeen: 0, localPassed: 0, moniChecked: 0, moniPassed: 0, rejected: 0, sent: 0 };
+      stats[key] = (stats[key] || 0) + 1;
+      chrome.storage.local.set({ radarStats: stats });
+   });
+}
+
 function processTweets() {
   const articles = document.querySelectorAll('article[data-testid="tweet"]');
   
@@ -12,14 +20,25 @@ function processTweets() {
     if (!data || processedTweetIds.has(data.tweet_id)) return;
     
     processedTweetIds.add(data.tweet_id);
-    newTweetsInCurrentScroll++; // Increment ONLY on actually new IDs to DOM
+    newTweetsInCurrentScroll++; 
     
     if (processedTweetIds.size >= MAX_PROCESSED_IDS) {
        const arr = Array.from(processedTweetIds);
        processedTweetIds = new Set(arr.slice(arr.length - 5000));
     }
     
-    // Fetch Moni Score asynchronously
+    updateStats('tweetsSeen');
+    
+    // IMPORTANT: Check Local Filter FIRST!
+    if (!window.passesLocalFilter(data.text)) {
+       updateStats('rejected');
+       return;
+    }
+    
+    updateStats('localPassed');
+    
+    // Fetch Moni Score asynchronously ONLY for candidates
+    updateStats('moniChecked');
     const moni_score = await window.getMoniScore(data.username, article);
     data.moni_score = moni_score;
     
@@ -31,14 +50,14 @@ function processTweets() {
        const ifUnavail = s.moniFilterIfUnavailable || 'allow';
        
        if (isMoniEnabled) {
-          if (moni_score === null && ifUnavail === 'ignore') return; // Reject if score is missing and set to ignore
-          if (moni_score !== null && moni_score < minScore) return; // Reject if score is too low
+          if (moni_score === null && ifUnavail === 'ignore') { updateStats('rejected'); return; }
+          if (moni_score !== null && moni_score < minScore) { updateStats('rejected'); return; }
        }
-
-       if (window.passesLocalFilter(data.text)) {
-         console.log(`[RADAR] Found relevant tweet: ${data.tweet_id}, Moni: ${moni_score}`);
-         chrome.runtime.sendMessage({ type: 'NEW_TWEET', payload: data });
-       }
+       
+       updateStats('moniPassed');
+       updateStats('sent');
+       console.log(`[RADAR] Found relevant tweet: ${data.tweet_id}, Moni: ${moni_score}`);
+       chrome.runtime.sendMessage({ type: 'NEW_TWEET', payload: data });
     });
   });
 }
@@ -60,23 +79,28 @@ function startObserver() {
     if (!data || processedTweetIds.has(data.tweet_id)) return;
     
     processedTweetIds.add(data.tweet_id);
-    // DO NOT increment newTweetsInCurrentScroll here, this is just the initial snapshot.
-    // The scroll logic will only count tweets that appear AFTER scrolling.
+    updateStats('tweetsSeen');
     
-    // Fetch Moni Score asynchronously
+    if (!window.passesLocalFilter(data.text)) {
+       updateStats('rejected');
+       return;
+    }
+    
+    updateStats('localPassed');
+    updateStats('moniChecked');
     const moni_score = await window.getMoniScore(data.username, article);
     data.moni_score = moni_score;
     
     chrome.storage.local.get(['settings'], (res) => {
        const s = res.settings || {};
        if (s.moniFilterEnabled !== false) {
-          if (moni_score === null && s.moniFilterIfUnavailable === 'ignore') return;
-          if (moni_score !== null && moni_score < (s.moniFilterMinScore || 1000)) return;
+          if (moni_score === null && s.moniFilterIfUnavailable === 'ignore') { updateStats('rejected'); return; }
+          if (moni_score !== null && moni_score < (s.moniFilterMinScore || 1000)) { updateStats('rejected'); return; }
        }
-       if (window.passesLocalFilter(data.text)) {
-         console.log(`[RADAR] Found relevant tweet (initial): ${data.tweet_id}, Moni: ${moni_score}`);
-         chrome.runtime.sendMessage({ type: 'NEW_TWEET', payload: data });
-       }
+       updateStats('moniPassed');
+       updateStats('sent');
+       console.log(`[RADAR] Found relevant tweet (initial): ${data.tweet_id}, Moni: ${moni_score}`);
+       chrome.runtime.sendMessage({ type: 'NEW_TWEET', payload: data });
     });
   });
   
@@ -97,5 +121,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'CHECK_NEW_TWEETS') {
      sendResponse({ newCount: newTweetsInCurrentScroll });
      newTweetsInCurrentScroll = 0; 
+  }
+  if (msg.type === 'NAVIGATE_IN_PAGE') {
+     console.log('[RADAR] Navigating in page to:', msg.url);
+     let a = document.createElement('a');
+     a.href = msg.url;
+     document.body.appendChild(a);
+     a.click();
+     a.remove();
+     sendResponse({ success: true });
   }
 });

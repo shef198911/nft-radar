@@ -12,7 +12,7 @@ let settings = {
   workerUrl: (typeof CONFIG !== 'undefined' ? CONFIG.workerUrl : ''),
   clientKey: (typeof CONFIG !== 'undefined' ? CONFIG.clientKey : ''),
   scanInterval: 10,
-  maxScrolls: 5,
+  maxScrolls: 15,
   moniFilterEnabled: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterEnabled : true),
   moniFilterMinScore: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterMinScore : 1000),
   moniFilterIfUnavailable: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterIfUnavailable : 'allow')
@@ -23,9 +23,7 @@ let sending = false;
 let queriesList = [];
 
 if (typeof SEARCH_GROUPS !== 'undefined') {
-  Object.values(SEARCH_GROUPS).forEach(group => {
-    queriesList.push(...group);
-  });
+  queriesList = [...SEARCH_GROUPS]; // SEARCH_GROUPS is now an array of large OR queries
 }
 
 function logInfo(msg) {
@@ -57,10 +55,10 @@ async function saveState() {
 
 function checkTabAndResume() {
    const gen = state.scannerGeneration;
-   if (state.activeTabId) {
-      chrome.tabs.get(state.activeTabId, (tab) => {
+   if (state.scannerTabId) {
+      chrome.tabs.get(state.scannerTabId, (tab) => {
          if (chrome.runtime.lastError || !tab) {
-            state.activeTabId = null;
+            state.scannerTabId = null;
             executeNextQuery(gen);
          } else {
             executeNextQuery(gen, true); 
@@ -158,12 +156,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   
   if (msg.type === 'START_OBSERVER_PROXY') {
-    if (state.activeTabId) chrome.tabs.sendMessage(state.activeTabId, { type: 'START_OBSERVER' }).catch(()=>null);
+    if (state.scannerTabId) chrome.tabs.sendMessage(state.scannerTabId, { type: 'START_OBSERVER' }).catch(()=>null);
   }
 
   if (msg.type === 'CHECK_NEW_TWEETS_PROXY') {
-    if (state.activeTabId) {
-        chrome.tabs.sendMessage(state.activeTabId, { type: 'CHECK_NEW_TWEETS' }, (resp) => {
+    if (state.scannerTabId) {
+        chrome.tabs.sendMessage(state.scannerTabId, { type: 'CHECK_NEW_TWEETS' }, (resp) => {
             sendResponse(resp || { newCount: 0 });
         });
         return true;
@@ -188,8 +186,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
          if (state.isRunning && gen === state.scannerGeneration) executeNextQuery(gen);
        }, settings.scanInterval * 60 * 1000);
     } else {
-         // Random delay between 15 and 25 seconds to avoid Twitter rate limit block
-         const delay = 15000 + Math.floor(Math.random() * 10000);
+         // Delay between queries (60-120 seconds) as requested by user
+         const delay = 60000 + Math.floor(Math.random() * 60000);
          logInfo(`Waiting ${Math.round(delay/1000)} seconds before next query...`);
          setTimeout(() => {
            if (state.isRunning && gen === state.scannerGeneration) executeNextQuery(gen);
@@ -199,12 +197,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 function navigateTab(url, cb) {
-  if (state.activeTabId) {
-    chrome.tabs.get(state.activeTabId, (tab) => {
+  if (state.scannerTabId) {
+    chrome.tabs.get(state.scannerTabId, (tab) => {
       if (chrome.runtime.lastError || !tab) {
          createTab(url, cb);
       } else {
-         chrome.tabs.update(state.activeTabId, { url: url }, cb);
+         // Try in-page SPA navigation first to avoid full reload
+         chrome.tabs.sendMessage(state.scannerTabId, { type: 'NAVIGATE_IN_PAGE', url: url }, (response) => {
+             if (chrome.runtime.lastError) {
+                 // Fallback to update if content script is not injected
+                 chrome.tabs.update(state.scannerTabId, { url: url }, cb);
+             } else {
+                 cb(tab);
+             }
+         });
       }
     });
   } else {
@@ -213,8 +219,9 @@ function navigateTab(url, cb) {
 }
 
 function createTab(url, cb) {
+  // Ensure we create a separate scanner tab that doesn't hijack user's active tab
   chrome.tabs.create({ url: url, active: false }, (tab) => {
-     state.activeTabId = tab.id;
+     state.scannerTabId = tab.id;
      saveState();
      cb(tab);
   });
@@ -229,20 +236,20 @@ function executeNextQuery(gen, resume = false) {
   const encodedQuery = encodeURIComponent(query);
   const searchUrl = `https://x.com/search?q=${encodedQuery}&src=typed_query&f=live`;
   
-  if (state.activeTabId) {
-     chrome.tabs.sendMessage(state.activeTabId, { type: 'STOP_OBSERVER' }).catch(()=>null);
+  if (state.scannerTabId) {
+     chrome.tabs.sendMessage(state.scannerTabId, { type: 'STOP_OBSERVER' }).catch(()=>null);
   }
   
   navigateTab(searchUrl, (tab) => {
      setTimeout(() => {
         if (state.isRunning && gen === state.scannerGeneration) {
-           chrome.tabs.sendMessage(state.activeTabId, { 
+           chrome.tabs.sendMessage(state.scannerTabId, { 
               type: 'START_SCROLL', 
               maxScrolls: settings.maxScrolls,
               generation: gen
            }).catch(()=>null);
         }
-     }, 6000);
+     }, 6000); // 6 seconds wait for SPA transition
   });
 }
 
@@ -262,8 +269,8 @@ function stopScanner() {
   state.isRunning = false;
   state.scannerGeneration = 0; 
   saveState();
-  if (state.activeTabId) {
-     chrome.tabs.sendMessage(state.activeTabId, { type: 'STOP_SCROLL' }).catch(()=>null);
+  if (state.scannerTabId) {
+     chrome.tabs.sendMessage(state.scannerTabId, { type: 'STOP_SCROLL' }).catch(()=>null);
   }
 }
 

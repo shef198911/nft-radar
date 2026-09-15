@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     workerUrlInput.value = settings.workerUrl || (typeof CONFIG !== 'undefined' ? CONFIG.workerUrl : '');
     clientKeyInput.value = settings.clientKey || (typeof CONFIG !== 'undefined' ? CONFIG.clientKey : '');
     scanIntervalInput.value = settings.scanInterval || 10;
-    maxScrollsInput.value = settings.maxScrolls || 5;
+    maxScrollsInput.value = settings.maxScrolls || 15;
     
     moniFilterEnabled.checked = settings.moniFilterEnabled !== undefined ? settings.moniFilterEnabled : (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterEnabled : true);
     moniFilterMinScore.value = settings.moniFilterMinScore !== undefined ? settings.moniFilterMinScore : (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterMinScore : 1000);

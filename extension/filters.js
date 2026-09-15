@@ -2,25 +2,32 @@ function passesLocalFilter(text) {
   if (!text) return false;
   const lowerText = text.toLowerCase();
   
+  // Since we are inside a specific NFT search query, we can be more permissive locally.
+  // The backend scoring will still filter out weak signals.
+  
   const isNFT = /\bnfts?\b/i.test(text);
   const isRobinhood = /\brobinhood\b/i.test(text) || lowerText.includes('rh chain');
   
-  const hasWhitelist = lowerText.includes('whitelist') || /\bwl\b/i.test(text) || lowerText.includes('allowlist') || lowerText.includes('allow list');
-  const hasFcfs = /\bfcfs\b/i.test(text) || /\bgtd\b/i.test(text) || lowerText.includes('guaranteed');
+  const hasWL = lowerText.includes('whitelist') || /\bwl\b/i.test(text) || lowerText.includes('allowlist') || lowerText.includes('allow list');
+  const hasFCFS = /\bfcfs\b/i.test(text) || /\bgtd\b/i.test(text) || lowerText.includes('guaranteed');
+  const hasMint = /\b(mint|drop|launch|upcoming|collection)\b/i.test(text);
   const hasFree = lowerText.includes('free') || lowerText.includes('0 eth');
-  
   const isGiveaway = lowerText.includes('giveaway') || lowerText.includes('raffle');
   
-  const isOpportunity = /\b(mint|drop|launch|upcoming|collection)\b/i.test(text) || hasWhitelist || hasFcfs;
+  if (isNFT) return true;
+  if (isRobinhood) return true;
   
-  const hasFreeMintContext = hasFree && (isNFT || isOpportunity || isRobinhood);
-  const isValidSignal = isOpportunity || hasFreeMintContext;
+  // WL / Spots / Giveaways
+  if (hasWL && isGiveaway) return true; // WL giveaway, whitelist raffle
+  if (hasWL && (hasFCFS || hasMint || hasFree)) return true; // FCFS WL, free WL, WL mint
+  if (/spots?|winners?|spots/i.test(text) && hasWL) return true; // 100 WL spots
+  if (/\b\d+\s*(?:x\s*)?(?:wl|whitelist|allowlist|gtd|fcfs)\b/i.test(text)) return true; // 10 GTD WL
   
-  if (!isValidSignal) return false;
+  // Mints
+  if (hasFree && hasMint) return true; // free mint, free drop
+  if (hasMint && hasFCFS) return true; // FCFS mint
   
-  // A whitelist giveaway/raffle is valid even without the word "NFT"
-  const isWlGiveaway = hasWhitelist && isGiveaway;
-  
-  return isRobinhood || isNFT || isWlGiveaway;
+  return false;
 }
+if (typeof window !== 'undefined') window.passesLocalFilter = passesLocalFilter;
 if (typeof window !== 'undefined') window.passesLocalFilter = passesLocalFilter;

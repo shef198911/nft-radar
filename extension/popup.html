@@ -3,32 +3,52 @@
 <head>
   <meta charset="utf-8">
   <style>
-    body { font-family: Arial, sans-serif; width: 250px; padding: 15px; }
-    h2 { margin-top: 0; }
+    body { font-family: Arial, sans-serif; width: 300px; padding: 15px; font-size: 13px; }
+    h2 { margin-top: 0; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
     .status { margin-bottom: 15px; font-weight: bold; }
     .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
     .running { background-color: #4caf50; }
     .stopped { background-color: #f44336; }
-    button { display: block; width: 100%; margin-bottom: 10px; padding: 10px; cursor: pointer; }
-    .queue-info { font-size: 12px; color: #666; margin-top: 15px; }
+    button { display: block; width: 100%; margin-bottom: 5px; padding: 8px; cursor: pointer; }
+    .debug-box { border: 1px solid #ccc; background: #f9f9f9; padding: 10px; margin-top: 15px; font-family: monospace; font-size: 12px; }
+    .debug-box div { margin-bottom: 4px; }
+    .moni-box { margin-top: 15px; padding: 10px; border: 1px solid #bbb; border-radius: 4px; }
   </style>
 </head>
 <body>
   <h2>NFT RADAR</h2>
   
   <div class="status">
-    Status: 
+    Scanner: 
     <span id="status-dot" class="status-dot stopped"></span>
     <span id="status-text">STOPPED</span>
   </div>
 
-  <button id="btn-start">Start</button>
-  <button id="btn-stop">Stop</button>
+  <button id="btn-start" style="background: #e8f5e9;">Start</button>
+  <button id="btn-stop" style="background: #ffebee;">Stop</button>
   <button id="btn-settings">Settings</button>
+  <button id="btn-reset-stats">Reset Stats</button>
 
-  <div class="queue-info">
-    <span id="current-query">Query 0/0</span><br>
-    Queue: <span id="queue-count">0</span> | Failed: <span id="failed-count">0</span>
+  <div class="moni-box">
+    <strong>Moni Filter: <span id="moni-status">ON</span></strong><br>
+    Min Score: <span id="moni-min">1000</span><br>
+    <button id="btn-toggle-moni" style="margin-top: 5px; padding: 5px;">Turn OFF</button>
+  </div>
+
+  <div class="debug-box">
+    <div style="font-weight:bold;">Current search:</div>
+    <div id="current-query" style="word-break: break-all; margin-bottom: 10px; color: #555;">-</div>
+    
+    <div>Tweets seen: <span id="stats-seen">0</span></div>
+    <div>Local Filter passed: <span id="stats-local">0</span></div>
+    <div>Moni checked: <span id="stats-moni">0</span></div>
+    <div>Moni >= Min: <span id="stats-moni-passed">0</span></div>
+    <div>Rejected: <span id="stats-rejected">0</span></div>
+    <div>Sent to Worker: <span id="stats-sent">0</span></div>
+    
+    <div style="margin-top: 10px; border-top: 1px solid #ccc; padding-top: 5px;">
+      Queue: <span id="queue-count">0</span> | Failed: <span id="failed-count">0</span>
+    </div>
   </div>
 
   <script src="popup.js"></script>

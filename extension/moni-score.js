@@ -14,45 +14,51 @@ async function getMoniScore(username, tweetNode) {
     }
   }
 
-  // Helper to extract Moni score from a node
-  function extractScoreFromNode(node) {
-    if (!node) return null;
-    // Look for elements that might contain the Moni Score
-    // Moni extension typically injects elements with 'moni' in class or id
-    const allElements = node.querySelectorAll('*');
+  // Helper to extract Moni score globally for a specific username
+  function extractScoreGlobally() {
+    const allElements = document.querySelectorAll('*');
     for (let el of allElements) {
       const text = el.innerText || '';
-      const html = el.innerHTML || '';
       
-      // Heuristic: check if this specific element looks like the Moni Score badge
-      // Often it's a number right next to a Moni logo or has a tooltip "Moni Score"
+      // Look for Moni logo/class
       if (el.className && typeof el.className === 'string' && el.className.toLowerCase().includes('moni')) {
-         // check if it's the score element
          if (text.trim().match(/^[0-9,]+$/)) {
-             return parseInt(text.replace(/,/g, ''), 10);
+             const score = parseInt(text.replace(/,/g, ''), 10);
+             // Verify it belongs to the user
+             let parent = el.parentElement;
+             let foundUser = false;
+             for (let i = 0; i < 6 && parent; i++) {
+                if (parent.innerText && parent.innerText.toLowerCase().includes(username.toLowerCase())) {
+                   foundUser = true; break;
+                }
+                parent = parent.parentElement;
+             }
+             if (foundUser || tweetNode.contains(el)) return score;
          }
       }
       
-      // Also look for specific aria-labels or titles
       const title = el.getAttribute('title') || el.getAttribute('aria-label') || '';
       if (title.toLowerCase().includes('moni score')) {
          let match = title.match(/(\d[\d,]*)/);
-         if (match) return parseInt(match[1].replace(/,/g, ''), 10);
-         
-         match = text.match(/(\d[\d,]*)/);
-         if (match) return parseInt(match[1].replace(/,/g, ''), 10);
+         let score = null;
+         if (match) score = parseInt(match[1].replace(/,/g, ''), 10);
+         else {
+           match = text.match(/(\d[\d,]*)/);
+           if (match) score = parseInt(match[1].replace(/,/g, ''), 10);
+         }
+         if (score !== null) {
+             let parent = el.parentElement;
+             let foundUser = false;
+             for (let i = 0; i < 8 && parent; i++) {
+                if (parent.innerText && parent.innerText.toLowerCase().includes(username.toLowerCase())) {
+                   foundUser = true; break;
+                }
+                parent = parent.parentElement;
+             }
+             if (foundUser || tweetNode.contains(el)) return score;
+         }
       }
     }
-    
-    // Fallback: look for text "Moni Score" or "Moni" nearby
-    for (let el of allElements) {
-       const text = el.innerText || '';
-       if (text.includes('Moni Score')) {
-          const match = text.match(/Moni\s*Score[\s:]*([0-9,]+)/i);
-          if (match) return parseInt(match[1].replace(/,/g, ''), 10);
-       }
-    }
-
     return null;
   }
 
@@ -63,7 +69,7 @@ async function getMoniScore(username, tweetNode) {
     const maxAttempts = 15; // 15 * 100ms = 1.5s
     
     const tryExtract = () => {
-      let score = extractScoreFromNode(tweetNode);
+      let score = extractScoreGlobally();
       if (score !== null) {
         window.moniScoreCache[username] = { score, checkedAt: Date.now() };
         resolve(score);
