@@ -77,7 +77,7 @@ router.post('/ingest', async (request, env) => {
               const replyMarkup = {
                 inline_keyboard: [[{ text: 'Open Tweet', url: payload.tweet_url }]]
               };
-              const tgRes = await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, msg, replyMarkup);
+              const tgRes = await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, msg, replyMarkup, env.TELEGRAM_THREAD_ID);
               if (tgRes.ok) await markSent(env.DB, payload.tweet_id, tgRes.message_id);
            }
        }
@@ -98,7 +98,7 @@ router.post('/ingest', async (request, env) => {
       const replyMarkup = {
         inline_keyboard: [[{ text: 'Open Tweet', url: scored.tweet_url }]]
       };
-      const tgRes = await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, message, replyMarkup);
+      const tgRes = await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, message, replyMarkup, env.TELEGRAM_THREAD_ID);
       if (tgRes.ok) {
         await markSent(env.DB, scored.tweet_id, tgRes.message_id);
       }

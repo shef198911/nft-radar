@@ -1,4 +1,4 @@
-export async function sendTelegramMessage(token, chatId, text, replyMarkup = null) {
+export async function sendTelegramMessage(token, chatId, text, replyMarkup = null, threadId = null) {
   if (!token || !chatId) {
     console.warn('Missing Telegram credentials');
     return { ok: false };
@@ -24,6 +24,9 @@ export async function sendTelegramMessage(token, chatId, text, replyMarkup = nul
     };
     if (replyMarkup) {
       payload.reply_markup = replyMarkup;
+    }
+    if (threadId) {
+      payload.message_thread_id = threadId;
     }
 
     const res = await fetch(url, {
