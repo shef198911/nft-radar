@@ -7,7 +7,23 @@ function escapeHTML(str) {
             .replace(/"/g, '&quot;');
 }
 
-export function formatTelegramMessage(data) {
+async function translateToRussian(text) {
+  if (!text) return '';
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ru&dt=t&q=${encodeURIComponent(text)}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json && json[0]) {
+       return json[0].map(segment => segment[0]).join('');
+    }
+    return text;
+  } catch (e) {
+    console.error('Translation error:', e);
+    return text;
+  }
+}
+
+export async function formatTelegramMessage(data) {
   let emoji = '🟢';
   if (data.priority === 'HOT') emoji = '🔥';
   else if (data.priority === 'HIGH') emoji = '🟡';
@@ -68,7 +84,8 @@ export function formatTelegramMessage(data) {
 
   if (data.text) {
     let snippet = data.text.length > 150 ? data.text.substring(0, 150) + '...' : data.text;
-    msg += `📝 <i>"${escapeHTML(snippet)}"</i>\n\n`;
+    const translatedSnippet = await translateToRussian(snippet);
+    msg += `📝 <i>"${escapeHTML(translatedSnippet)}"</i>\n\n`;
   }
   
   msg += `🔗 <a href="${data.tweet_url}"><b>Original Tweet</b></a>`;
