@@ -21,9 +21,15 @@ let settings = {
 let tweetQueue = [];
 let sending = false;
 let queriesList = [];
+let tasksList = [];
 
 if (typeof SEARCH_GROUPS !== 'undefined') {
   queriesList = [...SEARCH_GROUPS]; // SEARCH_GROUPS is now an array of large OR queries
+  // Build task list alternating TOP (main) and LATEST (secondary, fewer scrolls)
+  for (let q of queriesList) {
+    tasksList.push({ query: q, tab: 'top', scrollRatio: 1.0 });
+    tasksList.push({ query: q, tab: 'latest', scrollRatio: 0.3 });
+  }
 }
 
 function logInfo(msg) {
@@ -179,7 +185,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     state.currentQueryIndex++;
     saveState();
 
-    if (state.currentQueryIndex >= queriesList.length) {
+    if (state.currentQueryIndex >= tasksList.length) {
        state.currentQueryIndex = 0;
        saveState();
        logInfo(`Cycle complete. Waiting ${settings.scanInterval} minutes...`);
@@ -229,13 +235,15 @@ function createTab(url, cb) {
 }
 
 function executeNextQuery(gen, resume = false) {
-  if (!state.isRunning || queriesList.length === 0 || gen !== state.scannerGeneration) return;
+  if (!state.isRunning || tasksList.length === 0 || gen !== state.scannerGeneration) return;
   
-  const query = queriesList[state.currentQueryIndex];
-  logInfo(`Query ${state.currentQueryIndex + 1}/${queriesList.length}: ${query}`);
+  const task = tasksList[state.currentQueryIndex];
+  logInfo(`Task ${state.currentQueryIndex + 1}/${tasksList.length} (${task.tab.toUpperCase()}): ${task.query}`);
   
-  const encodedQuery = encodeURIComponent(query);
-  const searchUrl = `https://x.com/search?q=${encodedQuery}&src=typed_query&f=live`;
+  const encodedQuery = encodeURIComponent(task.query);
+  const searchUrl = task.tab === 'latest' 
+    ? `https://x.com/search?q=${encodedQuery}&src=typed_query&f=live`
+    : `https://x.com/search?q=${encodedQuery}&src=typed_query`;
   
   if (state.scannerTabId) {
      chrome.tabs.sendMessage(state.scannerTabId, { type: 'STOP_OBSERVER' }).catch(()=>null);
@@ -246,7 +254,7 @@ function executeNextQuery(gen, resume = false) {
         if (state.isRunning && gen === state.scannerGeneration) {
            chrome.tabs.sendMessage(state.scannerTabId, { 
               type: 'START_SCROLL', 
-              maxScrolls: settings.maxScrolls,
+              maxScrolls: Math.max(2, Math.floor(settings.maxScrolls * task.scrollRatio)),
               generation: gen
            }).catch(()=>null);
         }
@@ -288,6 +296,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     processQueue();
   }
   if (msg.type === 'GET_STATE') {
-    sendResponse({ state, queue: tweetQueue, queriesLength: queriesList.length });
+    sendResponse({ state, queue: tweetQueue, queriesLength: tasksList.length });
   }
 });

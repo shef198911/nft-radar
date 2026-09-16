@@ -29,6 +29,18 @@ function processTweets() {
     
     updateStats('tweetsSeen');
     
+    // Check age (Max 5 days)
+    if (data.timestamp) {
+        const tweetDate = new Date(data.timestamp);
+        if (!isNaN(tweetDate.getTime())) {
+            const ageDays = (Date.now() - tweetDate.getTime()) / (1000 * 60 * 60 * 24);
+            if (ageDays > 5) {
+                updateStats('rejected');
+                return;
+            }
+        }
+    }
+    
     // IMPORTANT: Check Local Filter FIRST!
     if (!window.passesLocalFilter(data.text)) {
        updateStats('rejected');
@@ -80,6 +92,17 @@ function startObserver() {
     
     processedTweetIds.add(data.tweet_id);
     updateStats('tweetsSeen');
+    
+    if (data.timestamp) {
+        const tweetDate = new Date(data.timestamp);
+        if (!isNaN(tweetDate.getTime())) {
+            const ageDays = (Date.now() - tweetDate.getTime()) / (1000 * 60 * 60 * 24);
+            if (ageDays > 5) {
+                updateStats('rejected');
+                return;
+            }
+        }
+    }
     
     if (!window.passesLocalFilter(data.text)) {
        updateStats('rejected');
