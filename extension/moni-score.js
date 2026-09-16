@@ -32,9 +32,27 @@ async function getMoniScore(username, tweetNode) {
      // 2. Class/Title based detection
      const moniNodes = rootNode.querySelectorAll('[class*="moni" i], [title*="moni" i], [aria-label*="moni" i]');
      for (let node of moniNodes) {
-         const match = node.innerText.match(/\b(\d{2,6})\b/);
+         const match = node.innerText.match(/\b(\d{1,6})\b/);
          if (match) return parseInt(match[1], 10);
      }
+     
+     // 3. Structural detection for third-party badges (e.g. purple pill with "58")
+     // Third-party extensions inject elements without native X 'css-...' auto-generated classes.
+     // We look for any leaf node that contains purely a number and lacks X classes.
+     let possibleScores = [];
+     const allElements = rootNode.querySelectorAll('*');
+     for (let el of allElements) {
+         if (el.children.length === 0) {
+             const txt = (el.innerText || el.textContent || '').trim();
+             if (/^\d{1,6}$/.test(txt)) {
+                 const hasTwitterClass = Array.from(el.classList).some(c => c.startsWith('css-'));
+                 if (!hasTwitterClass) {
+                     possibleScores.push(parseInt(txt, 10));
+                 }
+             }
+         }
+     }
+     if (possibleScores.length > 0) return possibleScores[possibleScores.length - 1];
      
      return null;
   }
