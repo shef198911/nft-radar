@@ -63,15 +63,32 @@ function updateStats(key) {
    });
 }
 
-function processTweets() {
-  const articles = document.querySelectorAll('article[data-testid="tweet"]');
-  
-  articles.forEach(async article => {
+let hoverQueue = [];
+let isProcessingHoverQueue = false;
+
+async function pumpHoverQueue() {
+    if (isProcessingHoverQueue) return;
+    isProcessingHoverQueue = true;
+    
+    while (hoverQueue.length > 0) {
+        const item = hoverQueue.shift();
+        try {
+            await item();
+        } catch (e) {
+            console.error('[RADAR] Hover error', e);
+        }
+    }
+    
+    isProcessingHoverQueue = false;
+}
+
+function processArticles(articles, isInitial = false) {
+  articles.forEach(article => {
     const data = window.extractTweetData(article);
     if (!data || processedTweetIds.has(data.tweet_id)) return;
     
     processedTweetIds.add(data.tweet_id);
-    newTweetsInCurrentScroll++; 
+    if (!isInitial) newTweetsInCurrentScroll++; 
     
     if (processedTweetIds.size >= MAX_PROCESSED_IDS) {
        const arr = Array.from(processedTweetIds);
@@ -100,47 +117,58 @@ function processTweets() {
     
     updateStats('localPassed');
     
-    // Fetch Moni Score asynchronously ONLY for candidates
-    updateStats('moniChecked');
-    const moni_score = await window.getMoniScore(data.username, article);
-    data.moni_score = moni_score;
-    
-    // Check Followers via Hover Card
-    const followerCount = await window.getFollowerCountViaHover(data.username, article);
-    data.follower_count = followerCount;
-    
-    // Request current settings to check filters
-    chrome.storage.local.get(['settings'], (res) => {
-       const s = res.settings || {};
-       const isMoniEnabled = s.moniFilterEnabled !== false;
-       const minScore = s.moniFilterMinScore || 1000;
-       const ifUnavail = s.moniFilterIfUnavailable || 'reject';
-       const minFollowers = s.minFollowers || 0;
-       
-       let passFollowers = false;
-       if (minFollowers > 0 && followerCount !== null && followerCount >= minFollowers) {
-           passFollowers = true;
-       }
-       
-       let passMoni = false;
-       if (isMoniEnabled) {
-           if (moni_score !== null && moni_score >= minScore) passMoni = true;
-           if (moni_score === null && ifUnavail === 'pass') passMoni = true;
-       }
-       
-       const bothDisabled = (!isMoniEnabled && minFollowers === 0);
-       
-       if (!bothDisabled && !passFollowers && !passMoni) {
-           updateStats('rejected');
-           return;
-       }
-       
-       updateStats('moniPassed');
-       updateStats('sent');
-       console.log(`[RADAR] Found relevant tweet: ${data.tweet_id}, Moni: ${moni_score}, Followers: ${followerCount}`);
-       chrome.runtime.sendMessage({ type: 'TRANSLATE_AND_ENQUEUE', payload: data });
+    // Enqueue async processing
+    hoverQueue.push(async () => {
+        updateStats('moniChecked');
+        const moni_score = await window.getMoniScore(data.username, article);
+        data.moni_score = moni_score;
+        
+        const followerCount = await window.getFollowerCountViaHover(data.username, article);
+        data.follower_count = followerCount;
+        
+        return new Promise((resolve) => {
+            chrome.storage.local.get(['settings'], (res) => {
+               const s = res.settings || {};
+               const isMoniEnabled = s.moniFilterEnabled !== false;
+               const minScore = s.moniFilterMinScore || 1000;
+               const ifUnavail = s.moniFilterIfUnavailable || 'reject';
+               const minFollowers = s.minFollowers || 0;
+               
+               let passFollowers = false;
+               if (minFollowers > 0 && followerCount !== null && followerCount >= minFollowers) {
+                   passFollowers = true;
+               }
+               
+               let passMoni = false;
+               if (isMoniEnabled) {
+                   if (moni_score !== null && moni_score >= minScore) passMoni = true;
+                   if (moni_score === null && ifUnavail === 'pass') passMoni = true;
+               }
+               
+               const bothDisabled = (!isMoniEnabled && minFollowers === 0);
+               
+               if (!bothDisabled && !passFollowers && !passMoni) {
+                   updateStats('rejected');
+                   resolve();
+                   return;
+               }
+               
+               updateStats('moniPassed');
+               updateStats('sent');
+               console.log(`[RADAR] Found relevant tweet: ${data.tweet_id}, Moni: ${moni_score}, Followers: ${followerCount}`);
+               chrome.runtime.sendMessage({ type: 'TRANSLATE_AND_ENQUEUE', payload: data });
+               resolve();
+            });
+        });
     });
   });
+  
+  pumpHoverQueue();
+}
+
+function processTweets() {
+  const articles = document.querySelectorAll('article[data-testid="tweet"]');
+  processArticles(articles, false);
 }
 
 function startObserver() {
@@ -155,68 +183,7 @@ function startObserver() {
   
   // Process initial snapshot
   const articles = document.querySelectorAll('article[data-testid="tweet"]');
-  articles.forEach(async article => {
-    const data = window.extractTweetData(article);
-    if (!data || processedTweetIds.has(data.tweet_id)) return;
-    
-    processedTweetIds.add(data.tweet_id);
-    updateStats('tweetsSeen');
-    
-    if (data.timestamp) {
-        const tweetDate = new Date(data.timestamp);
-        if (!isNaN(tweetDate.getTime())) {
-            const ageDays = (Date.now() - tweetDate.getTime()) / (1000 * 60 * 60 * 24);
-            if (ageDays > 5) {
-                updateStats('rejected');
-                return;
-            }
-        }
-    }
-    
-    if (!window.passesLocalFilter(data.text)) {
-       updateStats('rejected');
-       return;
-    }
-    
-    updateStats('localPassed');
-    updateStats('moniChecked');
-    const moni_score = await window.getMoniScore(data.username, article);
-    data.moni_score = moni_score;
-    
-    const followerCount = await window.getFollowerCountViaHover(data.username, article);
-    data.follower_count = followerCount;
-    
-    chrome.storage.local.get(['settings'], (res) => {
-       const s = res.settings || {};
-       const isMoniEnabled = s.moniFilterEnabled !== false;
-       const minScore = s.moniFilterMinScore || 1000;
-       const ifUnavail = s.moniFilterIfUnavailable || 'reject';
-       const minFollowers = s.minFollowers || 0;
-       
-       let passFollowers = false;
-       if (minFollowers > 0 && followerCount !== null && followerCount >= minFollowers) {
-           passFollowers = true;
-       }
-       
-       let passMoni = false;
-       if (isMoniEnabled) {
-           if (moni_score !== null && moni_score >= minScore) passMoni = true;
-           if (moni_score === null && ifUnavail === 'pass') passMoni = true;
-       }
-       
-       const bothDisabled = (!isMoniEnabled && minFollowers === 0);
-       
-       if (!bothDisabled && !passFollowers && !passMoni) {
-           updateStats('rejected');
-           return;
-       }
-       
-       updateStats('moniPassed');
-       updateStats('sent');
-       console.log(`[RADAR] Found relevant tweet (initial): ${data.tweet_id}, Moni: ${moni_score}, Followers: ${followerCount}`);
-       chrome.runtime.sendMessage({ type: 'TRANSLATE_AND_ENQUEUE', payload: data });
-    });
-  });
+  processArticles(articles, true);
   
   newTweetsInCurrentScroll = 0;
 }

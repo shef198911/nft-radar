@@ -26,7 +26,7 @@ export async function sendTelegramMessage(token, chatId, text, replyMarkup = nul
       payload.reply_markup = replyMarkup;
     }
     if (threadId) {
-      payload.message_thread_id = threadId;
+      payload.message_thread_id = parseInt(threadId, 10);
     }
 
     const res = await fetch(url, {
