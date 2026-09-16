@@ -72,7 +72,11 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.openOptionsPage();
   });
   btnResetStats.addEventListener('click', () => {
-    chrome.storage.local.set({ radarStats: { tweetsSeen: 0, localPassed: 0, moniChecked: 0, moniPassed: 0, rejected: 0, sent: 0 } });
+    chrome.storage.local.set({ 
+       radarStats: { tweetsSeen: 0, localPassed: 0, moniChecked: 0, moniPassed: 0, rejected: 0, sent: 0 },
+       queue: [] 
+    });
+    chrome.runtime.sendMessage({ type: 'CLEAR_QUEUE' });
     refreshData();
   });
   btnToggleMoni.addEventListener('click', () => {

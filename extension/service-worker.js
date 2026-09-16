@@ -278,6 +278,10 @@ function stopScanner() {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'START_SCANNER') startScanner();
   if (msg.type === 'STOP_SCANNER') stopScanner();
+  if (msg.type === 'CLEAR_QUEUE') {
+    tweetQueue = [];
+    chrome.storage.local.set({ queue: [] });
+  }
   if (msg.type === 'UPDATE_SETTINGS') {
     settings = { ...settings, ...msg.settings };
     chrome.storage.local.set({ settings });
