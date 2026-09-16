@@ -51,9 +51,10 @@ export function formatTelegramMessage(data) {
   
   const types = [];
   if (data.is_free) types.push('Free Mint');
+  if (data.is_free_whitelist) types.push('Whitelist Free');
   if (data.is_wl_giveaway) types.push('WL Giveaway');
   else if (data.is_wl_raffle) types.push('WL Raffle');
-  else if (data.is_whitelist || data.is_allowlist) types.push('Whitelist');
+  else if ((data.is_whitelist || data.is_allowlist) && !data.is_free_whitelist) types.push('Whitelist');
   if (data.is_fcfs) types.push('FCFS');
   if (data.is_gtd) types.push('GTD');
   

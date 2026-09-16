@@ -46,8 +46,8 @@ export function normalizeOpportunity(parsed) {
   return {
     ...parsed,
     has_paid_price: hasPaidPrice,
-    price: hasPaidPrice ? priceMatch[0].toUpperCase() : parsed.price,
-    is_free: hasPaidPrice ? 0 : parsed.is_free,
+    price: parsed.price || (hasPaidPrice ? priceMatch[0].toUpperCase() : parsed.price),
+    is_free: parsed.free_scope === 'all' ? 1 : 0,
     mint_type: hasPaidPrice && parsed.mint_type === 'FREE_MINT' ? 'PAID_MINT' : parsed.mint_type,
     is_discussion: isDiscussion ? 1 : 0,
     is_actionable_opportunity: (!parsed.is_reply && !isDiscussion && hasActionIntent) ? 1 : 0

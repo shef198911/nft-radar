@@ -1,6 +1,7 @@
 import { analyzeLinkRisk } from './link-risk.js';
 import { normalizeOpportunity } from './opportunity-gate.js';
 import { buildProjectKey } from './project-key.js';
+import { parsePricing } from './pricing.js';
 
 export function parseTweet(payload) {
   const text = payload.text || '';
@@ -11,7 +12,8 @@ export function parseTweet(payload) {
   if (/\bwl\b/i.test(text) || lower.includes('whitelist') || lower.includes('white list')) is_whitelist = 1;
   if (lower.includes('allowlist') || lower.includes('allow list')) is_allowlist = 1;
   
-  if (lower.includes('free mint') || lower.includes('0 eth') || lower.includes('zero eth') || lower.includes('no cost') || lower.includes('free to mint') || lower.includes('free whitelist') || lower.includes('free wl')) is_free = 1;
+  const pricing = parsePricing(text);
+  is_free = pricing.is_free;
   if (/\bfcfs\b/i.test(text) || lower.includes('first come')) is_fcfs = 1;
   if (/\bgtd\b/i.test(text) || lower.includes('guaranteed')) is_gtd = 1;
 
@@ -59,7 +61,7 @@ export function parseTweet(payload) {
     }
   }
 
-  let mint_type = is_free ? 'FREE_MINT' : (lower.includes('mint') ? 'PAID_MINT' : 'UNKNOWN');
+  let mint_type = is_free ? 'FREE_MINT' : (pricing.is_free_whitelist ? 'WL_FREE_PAID_PUBLIC' : (lower.includes('mint') ? 'PAID_MINT' : 'UNKNOWN'));
   
   let opportunity_type = 'UNKNOWN';
   if (is_wl_giveaway || is_wl_raffle) opportunity_type = 'WL_GIVEAWAY';
@@ -81,12 +83,7 @@ export function parseTweet(payload) {
     if (isNaN(supply)) supply = null;
   }
 
-  let price = null;
-  if (is_free) price = 'FREE';
-  else {
-    const priceMatch = lower.match(/([0-9]*\.?[0-9]+)\s*(eth|sol|avax|bnb)/i);
-    if (priceMatch) price = priceMatch[0].toUpperCase();
-  }
+  const price = pricing.price;
 
   let mint_date = null;
   let mint_time = null;
@@ -153,6 +150,11 @@ export function parseTweet(payload) {
     mint_time_raw,
     supply,
     price,
+    paid_price: pricing.paid_price,
+    public_price: pricing.public_price,
+    whitelist_price: pricing.whitelist_price,
+    free_scope: pricing.free_scope,
+    is_free_whitelist: pricing.is_free_whitelist,
     wl_spots,
     is_free,
     is_whitelist,

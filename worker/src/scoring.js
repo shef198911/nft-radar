@@ -3,6 +3,7 @@ export function calculateScore(parsed) {
   
   if (parsed.is_free) score += 25;
   if (parsed.is_whitelist || parsed.is_allowlist) score += 15;
+  if (parsed.is_free_whitelist) score += 10;
   if (parsed.is_fcfs) score += 10;
   if (parsed.is_gtd) score += 10;
   if (parsed.is_robinhood) score += 25;

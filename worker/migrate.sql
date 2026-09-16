@@ -3,6 +3,11 @@
 ALTER TABLE tweets ADD COLUMN moni_score INTEGER;
 ALTER TABLE tweets ADD COLUMN wl_spots INTEGER;
 ALTER TABLE tweets ADD COLUMN follower_count INTEGER;
+ALTER TABLE tweets ADD COLUMN paid_price TEXT;
+ALTER TABLE tweets ADD COLUMN public_price TEXT;
+ALTER TABLE tweets ADD COLUMN whitelist_price TEXT;
+ALTER TABLE tweets ADD COLUMN free_scope TEXT;
+ALTER TABLE tweets ADD COLUMN is_free_whitelist INTEGER DEFAULT 0;
 ALTER TABLE tweets ADD COLUMN link_risk_level TEXT;
 ALTER TABLE tweets ADD COLUMN link_risk_score INTEGER;
 ALTER TABLE tweets ADD COLUMN link_risk_reasons TEXT;

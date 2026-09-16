@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS tweets (
   
   supply INTEGER,
   price TEXT,
+  paid_price TEXT,
+  public_price TEXT,
+  whitelist_price TEXT,
+  free_scope TEXT,
   follower_count INTEGER,
   moni_score INTEGER,
   wl_spots INTEGER,
@@ -33,6 +37,7 @@ CREATE TABLE IF NOT EXISTS tweets (
   link_risk_reasons TEXT,
   
   is_free INTEGER DEFAULT 0,
+  is_free_whitelist INTEGER DEFAULT 0,
   is_whitelist INTEGER DEFAULT 0,
   is_allowlist INTEGER DEFAULT 0,
   is_fcfs INTEGER DEFAULT 0,
