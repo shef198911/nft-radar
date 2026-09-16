@@ -137,12 +137,12 @@ function processArticles(articles, isInitial = false) {
         return;
     }
     
-    // Check age (Max 5 days)
+    // Check age (Max 2 days)
     if (data.timestamp) {
         const tweetDate = new Date(data.timestamp);
         if (!isNaN(tweetDate.getTime())) {
             const ageDays = (Date.now() - tweetDate.getTime()) / (1000 * 60 * 60 * 24);
-            if (ageDays > 5) {
+            if (ageDays > 2) {
                 updateStats('rejected');
                 return;
             }
