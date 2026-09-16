@@ -107,6 +107,29 @@ router.all('*', () => new Response('Not Found', { status: 404 }));
 
 export default {
   async fetch(request, env, ctx) {
-    return router.handle(request, env, ctx);
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, x-client-key',
+    };
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
+
+    try {
+      let response = await router.handle(request, env, ctx);
+      if (!response) {
+         response = new Response('Not Found', { status: 404 });
+      }
+      
+      const newResponse = new Response(response.body, response);
+      for (const [k, v] of Object.entries(corsHeaders)) {
+        newResponse.headers.set(k, v);
+      }
+      return newResponse;
+    } catch (e) {
+      return new Response('Internal error: ' + e.message, { status: 500, headers: corsHeaders });
+    }
   }
 };
