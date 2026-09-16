@@ -8,7 +8,7 @@
     "48": "icon.png",
     "128": "icon.png"
   },
-  "permissions": ["storage", "activeTab", "scripting"],
+  "permissions": ["storage", "activeTab", "scripting", "alarms"],
   "host_permissions": ["*://x.com/*", "*://twitter.com/*", "*://translate.googleapis.com/*"],
   "background": {
     "service_worker": "service-worker.js"

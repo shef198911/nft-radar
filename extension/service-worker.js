@@ -1,11 +1,26 @@
-importScripts('config.js');
+try {
+  importScripts('config.js');
+} catch (e) {
+  console.warn('[RADAR] config.js not found, using saved/manual settings.');
+}
 importScripts('queries.js');
+
+const ALARM_PROCESS_QUEUE = 'radar-process-queue';
+const ALARM_NEXT_QUERY = 'radar-next-query';
+const ALARM_SCROLL_WATCHDOG = 'radar-scroll-watchdog';
+const MIN_ALARM_DELAY_MS = 30000;
+const SOURCE_REFRESH_MS = 6 * 60 * 60 * 1000;
+const MAX_DYNAMIC_SOURCE_ACCOUNTS = 12;
 
 let state = {
   isRunning: false,
   currentQueryIndex: 0,
   activeTabId: null,
-  scannerGeneration: 0
+  scannerGeneration: 0,
+  nextRunAt: null,
+  activeScrollGeneration: null,
+  sourceAccounts: [],
+  sourcesUpdatedAt: 0
 };
 
 let settings = {
@@ -22,13 +37,36 @@ let tweetQueue = [];
 let sending = false;
 let queriesList = [];
 let tasksList = [];
+let dynamicSourceAccounts = [];
 
-if (typeof SEARCH_GROUPS !== 'undefined') {
-  queriesList = [...SEARCH_GROUPS]; // SEARCH_GROUPS is now an array of large OR queries
-  // Build task list alternating TOP (main) and LATEST (secondary, fewer scrolls)
+function sanitizeUsername(username) {
+  if (!username || typeof username !== 'string') return null;
+  const cleaned = username.replace(/^@/, '').trim();
+  return /^[A-Za-z0-9_]{1,15}$/.test(cleaned) ? cleaned : null;
+}
+
+function buildSourceQuery(username) {
+  return `(from:${username}) (NFT OR mint OR drop OR collection OR whitelist OR allowlist OR WL OR FCFS OR GTD OR "free mint" OR "Robinhood Chain" OR "RH Chain" OR "ARC Chain" OR Solana OR SOL)`;
+}
+
+function rebuildTasks() {
+  queriesList = typeof SEARCH_GROUPS !== 'undefined' ? [...SEARCH_GROUPS] : [];
+  tasksList = [];
+
   for (let q of queriesList) {
     tasksList.push({ query: q, tab: 'top', scrollRatio: 1.0 });
-    tasksList.push({ query: q, tab: 'latest', scrollRatio: 0.3 });
+    tasksList.push({ query: q, tab: 'latest', scrollRatio: 0.35 });
+  }
+
+  const uniqueAccounts = [...new Set(dynamicSourceAccounts.map(sanitizeUsername).filter(Boolean))]
+    .slice(0, MAX_DYNAMIC_SOURCE_ACCOUNTS);
+
+  for (let username of uniqueAccounts) {
+    tasksList.push({ query: buildSourceQuery(username), tab: 'latest', scrollRatio: 0.6 });
+  }
+
+  if (state.currentQueryIndex >= tasksList.length) {
+    state.currentQueryIndex = 0;
   }
 }
 
@@ -45,18 +83,134 @@ chrome.storage.local.get(['state', 'settings', 'queue'], (res) => {
   if (res.settings) settings = { ...settings, ...res.settings };
   if (res.queue) tweetQueue = res.queue;
   if (res.state) {
-    state = res.state;
-    if (state.isRunning) {
-       logInfo('Restored running state');
-       state.scannerGeneration = Date.now();
-       saveState();
-       checkTabAndResume();
-    }
+    state = { ...state, ...res.state };
   }
+  dynamicSourceAccounts = Array.isArray(state.sourceAccounts) ? state.sourceAccounts : [];
+  rebuildTasks();
+  if (state.isRunning) {
+     logInfo('Restored running state');
+     refreshDynamicSources().finally(() => resumeScannerAfterWake());
+  } else {
+     refreshDynamicSources();
+  }
+  scheduleQueue(2000);
 });
 
 async function saveState() {
   await chrome.storage.local.set({ state, queue: tweetQueue });
+}
+
+async function refreshDynamicSources(force = false) {
+  if (!settings.workerUrl || !settings.clientKey) return;
+  if (!force && state.sourcesUpdatedAt && Date.now() - state.sourcesUpdatedAt < SOURCE_REFRESH_MS) return;
+
+  try {
+    const baseUrl = settings.workerUrl.endsWith('/') ? settings.workerUrl + 'sources' : settings.workerUrl + '/sources';
+    const response = await fetch(`${baseUrl}?limit=${MAX_DYNAMIC_SOURCE_ACCOUNTS}`, {
+      headers: { 'x-client-key': settings.clientKey }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const data = await response.json();
+    dynamicSourceAccounts = (data.accounts || [])
+      .map((account) => sanitizeUsername(account.username || account))
+      .filter(Boolean);
+
+    state.sourceAccounts = dynamicSourceAccounts;
+    state.sourcesUpdatedAt = Date.now();
+    rebuildTasks();
+    await saveState();
+    logInfo(`Loaded ${dynamicSourceAccounts.length} dynamic source accounts`);
+  } catch (error) {
+    logError(`Source refresh failed: ${error.message}`);
+  }
+}
+
+function scheduleAlarm(name, delayMs) {
+  const safeDelay = Math.max(1000, delayMs);
+  chrome.alarms.create(name, { when: Date.now() + safeDelay });
+  if (safeDelay < MIN_ALARM_DELAY_MS) {
+    setTimeout(() => {
+      if (name === ALARM_PROCESS_QUEUE) processQueue();
+      if (name === ALARM_NEXT_QUERY) runScheduledQuery();
+    }, safeDelay);
+  }
+}
+
+function scheduleQueue(delayMs = 2000) {
+  scheduleAlarm(ALARM_PROCESS_QUEUE, delayMs);
+}
+
+function scheduleNextQuery(gen, delayMs) {
+  state.nextRunAt = Date.now() + delayMs;
+  saveState();
+  scheduleAlarm(ALARM_NEXT_QUERY, delayMs);
+  logInfo(`Next query scheduled in ${Math.round(delayMs / 1000)} seconds`);
+}
+
+function runScheduledQuery() {
+  if (!state.isRunning) return;
+  state.nextRunAt = null;
+  saveState();
+  executeNextQuery(state.scannerGeneration);
+}
+
+function resumeScannerAfterWake() {
+  if (!state.isRunning) return;
+  if (state.nextRunAt && Date.now() < state.nextRunAt) {
+    scheduleAlarm(ALARM_NEXT_QUERY, state.nextRunAt - Date.now());
+    return;
+  }
+  if (state.activeScrollGeneration) {
+    scheduleAlarm(ALARM_SCROLL_WATCHDOG, 30000);
+    return;
+  }
+  state.nextRunAt = null;
+  saveState();
+  checkTabAndResume();
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === ALARM_PROCESS_QUEUE) processQueue();
+  if (alarm.name === ALARM_NEXT_QUERY) runScheduledQuery();
+  if (alarm.name === ALARM_SCROLL_WATCHDOG) handleScrollWatchdog();
+});
+
+function finishCurrentQuery(gen, reason = 'complete') {
+  if (gen !== state.scannerGeneration || !state.isRunning) return;
+  if (state.activeScrollGeneration !== gen) return;
+
+  chrome.alarms.clear(ALARM_SCROLL_WATCHDOG);
+  state.activeScrollGeneration = null;
+
+  if (reason === 'timeout') {
+    logError('Scroll timed out, moving to next query');
+    if (state.scannerTabId) {
+      chrome.tabs.sendMessage(state.scannerTabId, { type: 'STOP_SCROLL' }).catch(()=>null);
+    }
+  } else {
+    logInfo('Query complete');
+  }
+
+  state.currentQueryIndex++;
+  state.nextRunAt = null;
+  saveState();
+
+  if (state.currentQueryIndex >= tasksList.length) {
+    state.currentQueryIndex = 0;
+    saveState();
+    logInfo(`Cycle complete. Waiting ${settings.scanInterval} minutes...`);
+    refreshDynamicSources();
+    scheduleNextQuery(gen, settings.scanInterval * 60 * 1000);
+  } else {
+    const delay = 60000 + Math.floor(Math.random() * 60000);
+    scheduleNextQuery(gen, delay);
+  }
+}
+
+function handleScrollWatchdog() {
+  if (!state.isRunning || !state.activeScrollGeneration) return;
+  finishCurrentQuery(state.activeScrollGeneration, 'timeout');
 }
 
 function checkTabAndResume() {
@@ -92,7 +246,7 @@ async function processQueue() {
 
   if (Date.now() < item.nextRetry) {
      sending = false;
-     setTimeout(processQueue, 5000);
+     scheduleQueue(Math.max(1000, item.nextRetry - Date.now()));
      return;
   }
 
@@ -100,14 +254,13 @@ async function processQueue() {
     try {
       logInfo(`Sending tweet ${tweet.tweet_id}...`);
       const baseUrl = settings.workerUrl.endsWith('/') ? settings.workerUrl + 'ingest' : settings.workerUrl + '/ingest';
-      // Append key to URL to avoid custom headers, which avoids CORS preflight (OPTIONS)
-      const url = `${baseUrl}?key=${encodeURIComponent(settings.clientKey)}`;
+      const url = baseUrl;
       
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          // text/plain avoids CORS preflight requests in Chrome
-          'Content-Type': 'text/plain'
+          'Content-Type': 'application/json',
+          'x-client-key': settings.clientKey
         },
         body: JSON.stringify(tweet)
       });
@@ -146,7 +299,7 @@ async function processQueue() {
   }
   
   sending = false;
-  setTimeout(processQueue, 2000);
+  scheduleQueue(2000);
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -204,27 +357,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === 'SCROLL_DONE') {
     const gen = msg.generation;
-    if (gen !== state.scannerGeneration || !state.isRunning) return;
-    
-    logInfo('Query complete');
-    state.currentQueryIndex++;
-    saveState();
-
-    if (state.currentQueryIndex >= tasksList.length) {
-       state.currentQueryIndex = 0;
-       saveState();
-       logInfo(`Cycle complete. Waiting ${settings.scanInterval} minutes...`);
-       setTimeout(() => {
-         if (state.isRunning && gen === state.scannerGeneration) executeNextQuery(gen);
-       }, settings.scanInterval * 60 * 1000);
-    } else {
-         // Delay between queries (60-120 seconds) as requested by user
-         const delay = 60000 + Math.floor(Math.random() * 60000);
-         logInfo(`Waiting ${Math.round(delay/1000)} seconds before next query...`);
-         setTimeout(() => {
-           if (state.isRunning && gen === state.scannerGeneration) executeNextQuery(gen);
-         }, delay);
-    }
+    finishCurrentQuery(gen);
   }
 });
 
@@ -261,6 +394,9 @@ function createTab(url, cb) {
 
 function executeNextQuery(gen, resume = false) {
   if (!state.isRunning || tasksList.length === 0 || gen !== state.scannerGeneration) return;
+  if (state.currentQueryIndex >= tasksList.length) state.currentQueryIndex = 0;
+  state.nextRunAt = null;
+  saveState();
   
   const task = tasksList[state.currentQueryIndex];
   logInfo(`Task ${state.currentQueryIndex + 1}/${tasksList.length} (${task.tab.toUpperCase()}): ${task.query}`);
@@ -277,24 +413,33 @@ function executeNextQuery(gen, resume = false) {
   navigateTab(searchUrl, (tab) => {
      setTimeout(() => {
         if (state.isRunning && gen === state.scannerGeneration) {
-           chrome.tabs.sendMessage(state.scannerTabId, { 
-              type: 'START_SCROLL', 
-              maxScrolls: Math.max(2, Math.floor(settings.maxScrolls * task.scrollRatio)),
-              generation: gen
-           }).catch(()=>null);
+           const scrollCount = Math.max(2, Math.floor(settings.maxScrolls * task.scrollRatio));
+           state.activeScrollGeneration = gen;
+           saveState();
+           scheduleAlarm(ALARM_SCROLL_WATCHDOG, 6000 + (scrollCount * 25000) + 60000);
+           chrome.tabs.sendMessage(state.scannerTabId, {
+               type: 'START_SCROLL',
+               maxScrolls: scrollCount,
+               generation: gen
+            }).catch(()=>null);
         }
      }, 6000); // 6 seconds wait for SPA transition
   });
 }
 
-function startScanner() {
+async function startScanner() {
   if (state.isRunning) {
      logInfo('Restarting loop strictly.');
   }
   logInfo('Starting RADAR');
   state.isRunning = true;
   state.scannerGeneration = Date.now();
+  state.nextRunAt = null;
+  state.activeScrollGeneration = null;
+  chrome.alarms.clear(ALARM_NEXT_QUERY);
+  chrome.alarms.clear(ALARM_SCROLL_WATCHDOG);
   saveState();
+  await refreshDynamicSources(true);
   executeNextQuery(state.scannerGeneration);
 }
 
@@ -302,6 +447,10 @@ function stopScanner() {
   logInfo('Stopping RADAR');
   state.isRunning = false;
   state.scannerGeneration = 0; 
+  state.nextRunAt = null;
+  state.activeScrollGeneration = null;
+  chrome.alarms.clear(ALARM_NEXT_QUERY);
+  chrome.alarms.clear(ALARM_SCROLL_WATCHDOG);
   saveState();
   if (state.scannerTabId) {
      chrome.tabs.sendMessage(state.scannerTabId, { type: 'STOP_SCROLL' }).catch(()=>null);
@@ -318,9 +467,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'UPDATE_SETTINGS') {
     settings = { ...settings, ...msg.settings };
     chrome.storage.local.set({ settings });
+    refreshDynamicSources(true);
     processQueue();
   }
   if (msg.type === 'GET_STATE') {
-    sendResponse({ state, queue: tweetQueue, queriesLength: tasksList.length });
+    sendResponse({ state, queue: tweetQueue, queriesLength: tasksList.length, sourceAccounts: dynamicSourceAccounts });
   }
 });

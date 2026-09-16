@@ -40,10 +40,10 @@ export async function sendTelegramMessage(token, chatId, text, replyMarkup = nul
       return { ok: true, message_id: data.result.message_id };
     } else {
       console.error('Telegram error:', data);
-      return { ok: false };
+      return { ok: false, error: data.description || data.error_code || 'telegram_error' };
     }
   } catch (e) {
     console.error('Telegram fetch error:', e);
-    return { ok: false };
+    return { ok: false, error: e.message };
   }
 }

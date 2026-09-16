@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS tweets (
   
   supply INTEGER,
   price TEXT,
+  follower_count INTEGER,
+  moni_score INTEGER,
+  wl_spots INTEGER,
   
   is_free INTEGER DEFAULT 0,
   is_whitelist INTEGER DEFAULT 0,
@@ -32,6 +35,10 @@ CREATE TABLE IF NOT EXISTS tweets (
   is_fcfs INTEGER DEFAULT 0,
   is_gtd INTEGER DEFAULT 0,
   is_robinhood INTEGER DEFAULT 0,
+  is_giveaway INTEGER DEFAULT 0,
+  is_raffle INTEGER DEFAULT 0,
+  is_wl_giveaway INTEGER DEFAULT 0,
+  is_wl_raffle INTEGER DEFAULT 0,
   
   sent_to_telegram INTEGER DEFAULT 0,
   telegram_message_id TEXT,

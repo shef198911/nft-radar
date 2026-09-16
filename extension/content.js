@@ -142,7 +142,7 @@ function processArticles(articles, isInitial = false) {
                let passMoni = false;
                if (isMoniEnabled) {
                    if (moni_score !== null && moni_score >= minScore) passMoni = true;
-                   if (moni_score === null && ifUnavail === 'pass') passMoni = true;
+                   if (moni_score === null && ifUnavail === 'allow') passMoni = true;
                }
                
                const bothDisabled = (!isMoniEnabled && minFollowers === 0);

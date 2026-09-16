@@ -7,6 +7,22 @@ function escapeHTML(str) {
             .replace(/"/g, '&quot;');
 }
 
+function formatAuthor(data) {
+  if (!data.username) return null;
+
+  const username = String(data.username).replace(/^@/, '').trim();
+  if (!/^[A-Za-z0-9_]{1,15}$/.test(username)) return null;
+
+  const displayName = data.display_name && data.display_name !== username
+    ? `${data.display_name} (@${username})`
+    : `@${username}`;
+
+  return {
+    label: displayName,
+    url: `https://x.com/${username}`
+  };
+}
+
 export function formatTelegramMessage(data) {
   let emoji = '🟢';
   if (data.priority === 'HOT') emoji = '🔥';
@@ -26,6 +42,11 @@ export function formatTelegramMessage(data) {
     msg += `📦 <b>Project:</b> ${escapeHTML(data.project_name)}\n`;
   } else if (data.display_name) {
     msg += `📦 <b>Source:</b> ${escapeHTML(data.display_name)}\n`;
+  }
+
+  const author = formatAuthor(data);
+  if (author) {
+    msg += `👤 <b>Author:</b> <a href="${escapeHTML(author.url)}">${escapeHTML(author.label)}</a>\n`;
   }
   
   const types = [];
@@ -77,7 +98,7 @@ export function formatTelegramMessage(data) {
   // If we remove the original tweet link, the regex `text.match(/https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/[^\s"']+/i)` will FAIL unless `data.text` has a url in it.
   // Oh, wait! `telegram.js` uses `text.match(...)` on the HTML body. If I remove the URL, preview won't work.
   // So I should hide the URL as a zero-width link or something, or pass the previewUrl directly.
-  msg += `<a href="${data.tweet_url}">&#8203;</a>`;
+  msg += `<a href="${escapeHTML(data.tweet_url)}">&#8203;</a>`;
   
   return msg;
 }
