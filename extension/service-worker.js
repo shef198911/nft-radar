@@ -91,19 +91,20 @@ async function processQueue() {
   }
 
   const tweet = item.payload;
-  
-  try {
-    logInfo(`Sending tweet ${tweet.tweet_id}...`);
-    const url = settings.workerUrl.endsWith('/') ? settings.workerUrl + 'ingest' : settings.workerUrl + '/ingest';
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-client-key': settings.clientKey
-      },
-      body: JSON.stringify(tweet)
-    });
+    try {
+      logInfo(`Sending tweet ${tweet.tweet_id}...`);
+      const baseUrl = settings.workerUrl.endsWith('/') ? settings.workerUrl + 'ingest' : settings.workerUrl + '/ingest';
+      // Append key to URL to avoid custom headers, which avoids CORS preflight (OPTIONS)
+      const url = `${baseUrl}?key=${encodeURIComponent(settings.clientKey)}`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          // text/plain avoids CORS preflight requests in Chrome
+          'Content-Type': 'text/plain'
+        },
+        body: JSON.stringify(tweet)
+      });
     
     if (response.ok || response.status === 409) {
       if (response.ok) logInfo(`Worker response 200 for ${tweet.tweet_id}`);

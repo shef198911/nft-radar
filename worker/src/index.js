@@ -37,7 +37,8 @@ router.get('/stats', async (request, env) => {
 });
 
 router.post('/ingest', async (request, env) => {
-  const clientKey = request.headers.get('x-client-key');
+  const url = new URL(request.url);
+  const clientKey = request.headers.get('x-client-key') || url.searchParams.get('key');
   if (clientKey !== env.CLIENT_KEY) {
     return new Response('Unauthorized', { status: 401 });
   }
