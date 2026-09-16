@@ -14,52 +14,63 @@ async function getMoniScore(username, tweetNode) {
     }
   }
 
-  // Helper to extract Moni score globally for a specific username
-  function extractScoreGlobally() {
-    const allElements = document.querySelectorAll('*');
-    for (let el of allElements) {
-      const text = el.innerText || '';
-      
-      // Look for Moni logo/class
-      if (el.className && typeof el.className === 'string' && el.className.toLowerCase().includes('moni')) {
-         if (text.trim().match(/^[0-9,]+$/)) {
-             const score = parseInt(text.replace(/,/g, ''), 10);
-             // Verify it belongs to the user
-             let parent = el.parentElement;
-             let foundUser = false;
-             for (let i = 0; i < 6 && parent; i++) {
-                if (parent.innerText && parent.innerText.toLowerCase().includes(username.toLowerCase())) {
-                   foundUser = true; break;
-                }
-                parent = parent.parentElement;
-             }
-             if (foundUser || tweetNode.contains(el)) return score;
-         }
-      }
-      
-      const title = el.getAttribute('title') || el.getAttribute('aria-label') || '';
-      if (title.toLowerCase().includes('moni score')) {
-         let match = title.match(/(\d[\d,]*)/);
-         let score = null;
-         if (match) score = parseInt(match[1].replace(/,/g, ''), 10);
-         else {
-           match = text.match(/(\d[\d,]*)/);
-           if (match) score = parseInt(match[1].replace(/,/g, ''), 10);
-         }
-         if (score !== null) {
-             let parent = el.parentElement;
-             let foundUser = false;
-             for (let i = 0; i < 8 && parent; i++) {
-                if (parent.innerText && parent.innerText.toLowerCase().includes(username.toLowerCase())) {
-                   foundUser = true; break;
-                }
-                parent = parent.parentElement;
-             }
-             if (foundUser || tweetNode.contains(el)) return score;
-         }
-      }
+  function extractMoniFromText(text) {
+     if (!text) return null;
+     // Look for explicit Moni patterns: [954] 🟢, (954) 🟡, 954 🔴, etc.
+     const match = text.match(/(?:\[|\()?(\d{2,6})(?:\]|\))?\s*[🟢🟡🔴🟣💎]/);
+     if (match) return parseInt(match[1], 10);
+     return null;
+  }
+
+  function extractMoniFromDOM(rootNode) {
+     if (!rootNode) return null;
+     
+     // 1. Text-based detection (most robust if emojis are used)
+     const textScore = extractMoniFromText(rootNode.innerText);
+     if (textScore !== null) return textScore;
+
+     // 2. Class/Title based detection
+     const moniNodes = rootNode.querySelectorAll('[class*="moni" i], [title*="moni" i], [aria-label*="moni" i]');
+     for (let node of moniNodes) {
+         const match = node.innerText.match(/\b(\d{2,6})\b/);
+         if (match) return parseInt(match[1], 10);
+     }
+     
+     return null;
+  }
+
+  function resolveScore() {
+    let score = null;
+    
+    // Strategy 1: Open Tweet or Feed Tweet (tweetNode provided)
+    if (tweetNode) {
+       const authorBlock = tweetNode.querySelector('[data-testid="User-Name"]');
+       if (authorBlock) {
+           score = extractMoniFromDOM(authorBlock);
+       }
     }
-    return null;
+    
+    // Strategy 2: Profile Page Header
+    if (score === null && window.location.pathname.toLowerCase() === `/${username.toLowerCase()}`) {
+       const profileHeader = document.querySelector('[data-testid="UserProfileHeader_Items"]')?.parentElement;
+       if (profileHeader) {
+           score = extractMoniFromDOM(profileHeader);
+       }
+    }
+    
+    // Strategy 3: Any Author Cell Globally (fallback)
+    if (score === null) {
+        const userLinks = document.querySelectorAll(`a[href="/${username}" i]`);
+        for (let link of userLinks) {
+           let container = link.closest('[data-testid="User-Name"], [data-testid="UserCell"]');
+           if (container) {
+               score = extractMoniFromDOM(container);
+               if (score !== null) break;
+           }
+        }
+    }
+    
+    return score;
   }
 
   // Wait for Moni to inject its DOM elements. 
@@ -69,7 +80,7 @@ async function getMoniScore(username, tweetNode) {
     const maxAttempts = 15; // 15 * 100ms = 1.5s
     
     const tryExtract = () => {
-      let score = extractScoreGlobally();
+      let score = resolveScore();
       if (score !== null) {
         window.moniScoreCache[username] = { score, checkedAt: Date.now() };
         resolve(score);

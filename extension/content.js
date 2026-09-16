@@ -47,10 +47,10 @@ function processTweets() {
        const s = res.settings || {};
        const isMoniEnabled = s.moniFilterEnabled !== false;
        const minScore = s.moniFilterMinScore || 1000;
-       const ifUnavail = s.moniFilterIfUnavailable || 'allow';
+       const ifUnavail = s.moniFilterIfUnavailable || 'reject';
        
        if (isMoniEnabled) {
-          if (moni_score === null && ifUnavail === 'ignore') { updateStats('rejected'); return; }
+          if (moni_score === null && ifUnavail === 'reject') { updateStats('rejected'); return; }
           if (moni_score !== null && moni_score < minScore) { updateStats('rejected'); return; }
        }
        
@@ -93,8 +93,9 @@ function startObserver() {
     
     chrome.storage.local.get(['settings'], (res) => {
        const s = res.settings || {};
+       const ifUnavail = s.moniFilterIfUnavailable || 'reject';
        if (s.moniFilterEnabled !== false) {
-          if (moni_score === null && s.moniFilterIfUnavailable === 'ignore') { updateStats('rejected'); return; }
+          if (moni_score === null && ifUnavail === 'reject') { updateStats('rejected'); return; }
           if (moni_score !== null && moni_score < (s.moniFilterMinScore || 1000)) { updateStats('rejected'); return; }
        }
        updateStats('moniPassed');

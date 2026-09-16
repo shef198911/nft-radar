@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     moniFilterEnabled.checked = settings.moniFilterEnabled !== undefined ? settings.moniFilterEnabled : (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterEnabled : true);
     moniFilterMinScore.value = settings.moniFilterMinScore !== undefined ? settings.moniFilterMinScore : (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterMinScore : 1000);
-    moniFilterIfUnavailable.value = settings.moniFilterIfUnavailable || (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterIfUnavailable : 'allow');
+    moniFilterIfUnavailable.value = settings.moniFilterIfUnavailable || (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterIfUnavailable : 'reject');
   });
 
   saveBtn.addEventListener('click', () => {

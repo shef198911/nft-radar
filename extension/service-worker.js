@@ -15,7 +15,7 @@ let settings = {
   maxScrolls: 15,
   moniFilterEnabled: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterEnabled : true),
   moniFilterMinScore: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterMinScore : 1000),
-  moniFilterIfUnavailable: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterIfUnavailable : 'allow')
+  moniFilterIfUnavailable: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterIfUnavailable : 'reject')
 };
 
 let tweetQueue = [];
