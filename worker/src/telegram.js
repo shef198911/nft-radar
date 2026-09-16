@@ -6,6 +6,13 @@ export async function sendTelegramMessage(token, chatId, text) {
   
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
   try {
+    // extract first twitter/x url to force vxtwitter preview
+    let previewUrl = undefined;
+    const urlMatch = text.match(/https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/[^\s"']+/i);
+    if (urlMatch) {
+      previewUrl = urlMatch[0].replace(/x\.com|twitter\.com/i, 'vxtwitter.com');
+    }
+
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -13,7 +20,10 @@ export async function sendTelegramMessage(token, chatId, text) {
         chat_id: chatId,
         text: text,
         parse_mode: 'HTML',
-        disable_web_page_preview: true
+        link_preview_options: {
+          is_disabled: false,
+          ...(previewUrl ? { url: previewUrl } : {})
+        }
       })
     });
     
