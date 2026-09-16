@@ -14,6 +14,9 @@ function extractTweetData(articleNode) {
     const urlParts = tweet_url.split('/');
     const tweet_id = urlParts[urlParts.length - 1];
     const username = urlParts[3];
+    const articleText = articleNode.innerText || '';
+    const currentStatusMatch = window.location.pathname.match(/^\/[^/]+\/status\/(\d+)/);
+    const is_reply = Boolean(currentStatusMatch && currentStatusMatch[1] !== tweet_id) || /\bReplying to\b/i.test(articleText);
     
     const nameEl = articleNode.querySelector('[data-testid="User-Name"]');
     let display_name = username;
@@ -54,6 +57,7 @@ function extractTweetData(articleNode) {
       username,
       display_name,
       is_verified,
+      is_reply,
       text,
       timestamp,
       links: [...new Set(extractedLinks)]

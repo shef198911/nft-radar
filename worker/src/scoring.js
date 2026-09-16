@@ -26,6 +26,8 @@ export function calculateScore(parsed) {
   if (lower.includes('dm for link') || lower.includes('dm me')) score -= 15;
   if (lower.includes('connect wallet')) score -= 10;
   if (lower.includes('drainer') || lower.includes('scam') || lower.includes('phishing')) score -= 15;
+  if (parsed.is_reply || parsed.is_discussion) score -= 40;
+  if (parsed.is_actionable_opportunity === 0) score -= 25;
   
   if (score < 0) score = 0;
   if (score > 100) score = 100;

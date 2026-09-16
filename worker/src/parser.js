@@ -1,4 +1,5 @@
 import { analyzeLinkRisk } from './link-risk.js';
+import { normalizeOpportunity } from './opportunity-gate.js';
 
 export function parseTweet(payload) {
   const text = payload.text || '';
@@ -30,7 +31,13 @@ export function parseTweet(payload) {
   }
   
   let chain = 'Unknown';
-  if (lower.includes('robinhood chain') || lower.includes('rh chain') || lower.includes('robinhoodchain')) {
+  if (
+    lower.includes('robinhood chain')
+    || lower.includes('robinhood crypto chain')
+    || lower.includes('robinhoodcrypto chain')
+    || lower.includes('robinhoodchain')
+    || lower.includes('rh chain')
+  ) {
     chain = 'Robinhood Chain';
     is_robinhood = 1;
   } else if (/\barc\b/i.test(text) || lower.includes('arc chain')) { chain = 'ARC'; }
@@ -44,7 +51,7 @@ export function parseTweet(payload) {
     else if (lower.includes('avalanche') || lower.includes('avax')) { chain = 'Avalanche'; }
     else if (lower.includes('ethereum') || /\beth\b/i.test(text)) { chain = 'Ethereum'; }
   
-  if (!is_robinhood && /\brobinhood\b/i.test(text)) {
+  if (!is_robinhood && (/\brobinhood\b/i.test(text) || lower.includes('robinhoodcrypto'))) {
     if (lower.includes('nft') || lower.includes('mint') || lower.includes('collection') || lower.includes('drop') || is_whitelist || is_allowlist || is_fcfs || is_gtd || is_free) {
       is_robinhood = 1;
       chain = 'Robinhood Chain';
@@ -133,7 +140,7 @@ export function parseTweet(payload) {
 
   const linkRisk = analyzeLinkRisk(payload.links || []);
 
-  return {
+  return normalizeOpportunity({
     ...payload,
     moni_score: payload.moni_score !== undefined ? payload.moni_score : null,
     chain,
@@ -160,5 +167,5 @@ export function parseTweet(payload) {
     has_mint_link: mint_link,
     has_official_link: official_link,
     ...linkRisk
-  };
+  });
 }

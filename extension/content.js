@@ -130,6 +130,12 @@ function processArticles(articles, isInitial = false) {
     }
     
     updateStats('tweetsSeen');
+
+    if (data.is_reply) {
+        updateStats('rejected');
+        console.log(`[RADAR] Reply/comment rejected: ${data.tweet_id}`);
+        return;
+    }
     
     // Check age (Max 5 days)
     if (data.timestamp) {
