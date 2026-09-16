@@ -2,6 +2,11 @@ function passesLocalFilter(text) {
   if (!text) return false;
   const lowerText = text.toLowerCase();
   
+  // Anti-scam fast reject
+  if (lowerText.includes('send eth') || lowerText.includes('send crypto') || lowerText.includes('drainer') || lowerText.includes('phishing')) {
+     return false;
+  }
+  
   const isNFT = /\bnfts?\b/i.test(text);
   const isRobinhood = /\brobinhood\b/i.test(text) || lowerText.includes('rh chain');
   

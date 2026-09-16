@@ -8,10 +8,29 @@ const MAX_NO_NEW_TWEETS_ATTEMPTS = 3;
 async function doScroll() {
   if (!isRunning || scrolls >= maxScrolls) return false;
   
-  window.scrollTo(0, document.body.scrollHeight);
+  // Human-like smooth scroll instead of instant jump to the bottom
+  const startY = window.scrollY;
+  let currentY = startY;
+  // Scroll roughly 1 to 2 screens down per cycle
+  const targetScrollDelta = window.innerHeight * (1.0 + Math.random()); 
+  
+  while (currentY - startY < targetScrollDelta) {
+      if (!isRunning) return false;
+      const step = 150 + Math.random() * 250;
+      currentY += step;
+      window.scrollTo({ top: currentY, behavior: 'smooth' });
+      // Small pause between wheel ticks
+      await new Promise(r => setTimeout(r, 300 + Math.random() * 500));
+      
+      if (currentY >= document.body.scrollHeight - window.innerHeight) {
+          break; // Reached absolute bottom of current DOM
+      }
+  }
+  
   scrolls++;
   
-  const scrollDelay = 5000 + Math.floor(Math.random() * 3000); // 5-8 seconds random delay
+  // Pause to 'read' the tweets and wait for network
+  const scrollDelay = 3000 + Math.floor(Math.random() * 3000); 
   await new Promise(resolve => setTimeout(resolve, scrollDelay));
   
   return new Promise(resolve => {
