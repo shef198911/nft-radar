@@ -115,16 +115,24 @@ function processTweets() {
        const isMoniEnabled = s.moniFilterEnabled !== false;
        const minScore = s.moniFilterMinScore || 1000;
        const ifUnavail = s.moniFilterIfUnavailable || 'reject';
-       const minFollowers = s.minFollowers || 0; // Default 0 if not set
+       const minFollowers = s.minFollowers || 0;
        
-       if (followerCount !== null && followerCount < minFollowers) {
-           updateStats('rejected');
-           return;
+       let passFollowers = false;
+       if (minFollowers > 0 && followerCount !== null && followerCount >= minFollowers) {
+           passFollowers = true;
        }
        
+       let passMoni = false;
        if (isMoniEnabled) {
-          if (moni_score === null && ifUnavail === 'reject') { updateStats('rejected'); return; }
-          if (moni_score !== null && moni_score < minScore) { updateStats('rejected'); return; }
+           if (moni_score !== null && moni_score >= minScore) passMoni = true;
+           if (moni_score === null && ifUnavail === 'pass') passMoni = true;
+       }
+       
+       const bothDisabled = (!isMoniEnabled && minFollowers === 0);
+       
+       if (!bothDisabled && !passFollowers && !passMoni) {
+           updateStats('rejected');
+           return;
        }
        
        updateStats('moniPassed');
@@ -180,18 +188,29 @@ function startObserver() {
     
     chrome.storage.local.get(['settings'], (res) => {
        const s = res.settings || {};
+       const isMoniEnabled = s.moniFilterEnabled !== false;
+       const minScore = s.moniFilterMinScore || 1000;
        const ifUnavail = s.moniFilterIfUnavailable || 'reject';
        const minFollowers = s.minFollowers || 0;
        
-       if (followerCount !== null && followerCount < minFollowers) {
+       let passFollowers = false;
+       if (minFollowers > 0 && followerCount !== null && followerCount >= minFollowers) {
+           passFollowers = true;
+       }
+       
+       let passMoni = false;
+       if (isMoniEnabled) {
+           if (moni_score !== null && moni_score >= minScore) passMoni = true;
+           if (moni_score === null && ifUnavail === 'pass') passMoni = true;
+       }
+       
+       const bothDisabled = (!isMoniEnabled && minFollowers === 0);
+       
+       if (!bothDisabled && !passFollowers && !passMoni) {
            updateStats('rejected');
            return;
        }
        
-       if (s.moniFilterEnabled !== false) {
-          if (moni_score === null && ifUnavail === 'reject') { updateStats('rejected'); return; }
-          if (moni_score !== null && moni_score < (s.moniFilterMinScore || 1000)) { updateStats('rejected'); return; }
-       }
        updateStats('moniPassed');
        updateStats('sent');
        console.log(`[RADAR] Found relevant tweet (initial): ${data.tweet_id}, Moni: ${moni_score}, Followers: ${followerCount}`);
