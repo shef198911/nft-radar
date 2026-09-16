@@ -187,15 +187,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === 'CHECK_NEW_TWEETS_PROXY') {
-    if (state.scannerTabId) {
-        chrome.tabs.sendMessage(state.scannerTabId, { type: 'CHECK_NEW_TWEETS' }, (resp) => {
-            sendResponse(resp || { newCount: 0 });
-        });
-        return true;
-    } else {
-        sendResponse({ newCount: 0 });
+      if (state.scannerTabId) {
+          chrome.tabs.sendMessage(state.scannerTabId, { type: 'CHECK_NEW_TWEETS' }, (resp) => {
+              if (chrome.runtime.lastError) {
+                  console.error('[RADAR] Tab error:', chrome.runtime.lastError);
+                  sendResponse({ newCount: 0 });
+              } else {
+                  sendResponse(resp || { newCount: 0 });
+              }
+          });
+          return true;
+      } else {
+          sendResponse({ newCount: 0 });
+      }
     }
-  }
 
   if (msg.type === 'SCROLL_DONE') {
     const gen = msg.generation;

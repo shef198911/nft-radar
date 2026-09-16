@@ -29,8 +29,8 @@ async function doScroll() {
   
   scrolls++;
   
-  // Pause to 'read' the tweets and wait for network
-  const scrollDelay = 3000 + Math.floor(Math.random() * 3000); 
+  // Pause to 'read' the tweets and wait for network (5 to 8 seconds)
+  const scrollDelay = 5000 + Math.floor(Math.random() * 3000); 
   await new Promise(resolve => setTimeout(resolve, scrollDelay));
   
   return new Promise(resolve => {
