@@ -67,14 +67,17 @@ export function formatTelegramMessage(data) {
   msg += `⭐ <b>Radar Score:</b> ${data.score}/100\n\n`;
 
   if (data.translated_text) {
-    let snippet = data.translated_text.length > 250 ? data.translated_text.substring(0, 250) + '...' : data.translated_text;
-    msg += `📝 <i>"${escapeHTML(snippet)}"</i>\n\n`;
+    msg += `<blockquote expandable>${escapeHTML(data.translated_text)}</blockquote>\n\n`;
   } else if (data.text) {
-    let snippet = data.text.length > 250 ? data.text.substring(0, 250) + '...' : data.text;
-    msg += `📝 <i>"${escapeHTML(snippet)}"</i>\n\n`;
+    msg += `<blockquote expandable>${escapeHTML(data.text)}</blockquote>\n\n`;
   }
   
-  msg += `🔗 <a href="${data.tweet_url}"><b>Original Tweet</b></a>`;
+  // Link preview triggers automatically from inline button or we leave it empty since preview Url is appended in telegram.js 
+  // Wait, if we completely remove the URL from the text body, Telegram won't generate a link preview automatically unless we specify `url` in `link_preview_options`. But `telegram.js` extracts it using a regex!
+  // If we remove the original tweet link, the regex `text.match(/https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/[^\s"']+/i)` will FAIL unless `data.text` has a url in it.
+  // Oh, wait! `telegram.js` uses `text.match(...)` on the HTML body. If I remove the URL, preview won't work.
+  // So I should hide the URL as a zero-width link or something, or pass the previewUrl directly.
+  msg += `<a href="${data.tweet_url}">&#8203;</a>`;
   
   return msg;
 }

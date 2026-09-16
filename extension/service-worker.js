@@ -160,9 +160,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (!res['processed_' + tweetId]) {
         chrome.storage.local.set({ ['processed_' + tweetId]: true });
         
-        // Translate snippet client-side (no CF block)
+        // Translate full text client-side (no CF block)
         if (msg.payload.text) {
-           let snippet = msg.payload.text.length > 250 ? msg.payload.text.substring(0, 250) + '...' : msg.payload.text;
+           let snippet = msg.payload.text.length > 4000 ? msg.payload.text.substring(0, 4000) + '...' : msg.payload.text;
            try {
              const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ru&dt=t&q=${encodeURIComponent(snippet)}`;
              const tres = await fetch(url);

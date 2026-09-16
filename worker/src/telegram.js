@@ -1,4 +1,4 @@
-export async function sendTelegramMessage(token, chatId, text) {
+export async function sendTelegramMessage(token, chatId, text, replyMarkup = null) {
   if (!token || !chatId) {
     console.warn('Missing Telegram credentials');
     return { ok: false };
@@ -13,18 +13,23 @@ export async function sendTelegramMessage(token, chatId, text) {
       previewUrl = urlMatch[0].replace(/x\.com|twitter\.com/i, 'vxtwitter.com');
     }
 
+    const payload = {
+      chat_id: chatId,
+      text: text,
+      parse_mode: 'HTML',
+      link_preview_options: {
+        is_disabled: false,
+        ...(previewUrl ? { url: previewUrl } : {})
+      }
+    };
+    if (replyMarkup) {
+      payload.reply_markup = replyMarkup;
+    }
+
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: text,
-        parse_mode: 'HTML',
-        link_preview_options: {
-          is_disabled: false,
-          ...(previewUrl ? { url: previewUrl } : {})
-        }
-      })
+      body: JSON.stringify(payload)
     });
     
     const data = await res.json();
