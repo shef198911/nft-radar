@@ -31,7 +31,8 @@ export function parseTweet(payload) {
   if (lower.includes('robinhood chain') || lower.includes('rh chain') || lower.includes('robinhoodchain')) {
     chain = 'Robinhood Chain';
     is_robinhood = 1;
-  } else if (lower.includes('base')) { chain = 'Base'; }
+  } else if (/\barc\b/i.test(text) || lower.includes('arc chain')) { chain = 'ARC'; }
+    else if (lower.includes('base')) { chain = 'Base'; }
     else if (lower.includes('arbitrum')) { chain = 'Arbitrum'; }
     else if (lower.includes('solana') || /\bsol\b/i.test(text)) { chain = 'Solana'; }
     else if (lower.includes('polygon')) { chain = 'Polygon'; }
