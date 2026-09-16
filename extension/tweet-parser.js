@@ -30,9 +30,23 @@ function extractTweetData(articleNode) {
     const textEl = articleNode.querySelector('[data-testid="tweetText"]');
     const text = textEl ? textEl.innerText : '';
     
-    const extractedLinks = links
-      .map(a => a.href)
-      .filter(href => !href.startsWith('https://x.com') && !href.startsWith('https://twitter.com') && !href.startsWith('/'));
+    const extractedLinks = [];
+    const addLink = (url) => {
+      if (!extractedLinks.includes(url)) extractedLinks.push(url);
+    };
+    links.forEach(a => {
+      const href = a.href;
+      if (!href || href.startsWith('https://x.com') || href.startsWith('https://twitter.com') || href.startsWith('/')) return;
+
+      const visibleText = (a.innerText || a.textContent || '').trim();
+      if (/^[\w.-]+\.[a-z]{2,}(?:\/\S*)?$/i.test(visibleText)) {
+        addLink(`https://${visibleText}`);
+      } else if (/^https?:\/\//i.test(visibleText)) {
+        addLink(visibleText);
+      } else {
+        addLink(href);
+      }
+    });
       
     return {
       tweet_id,

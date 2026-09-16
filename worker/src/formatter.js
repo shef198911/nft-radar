@@ -84,6 +84,15 @@ export function formatTelegramMessage(data) {
   if (data.moni_score !== null && data.moni_score !== undefined) {
     msg += `💎 <b>Moni Score:</b> ${data.moni_score.toLocaleString()}\n`;
   }
+
+  if (data.link_risk_level && data.link_risk_level !== 'OK') {
+    const icon = data.link_risk_level === 'HIGH' ? '🚨' : (data.link_risk_level === 'MEDIUM' ? '⚠️' : '🔎');
+    msg += `${icon} <b>Link Risk:</b> ${escapeHTML(data.link_risk_level)}`;
+    if (data.link_risk_reasons && data.link_risk_reasons.length > 0) {
+      msg += ` - ${escapeHTML(data.link_risk_reasons.slice(0, 3).join('; '))}`;
+    }
+    msg += '\n';
+  }
   
   msg += `⭐ <b>Radar Score:</b> ${data.score}/100\n\n`;
 

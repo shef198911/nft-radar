@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS tweets (
   follower_count INTEGER,
   moni_score INTEGER,
   wl_spots INTEGER,
+  link_risk_level TEXT,
+  link_risk_score INTEGER,
+  link_risk_reasons TEXT,
   
   is_free INTEGER DEFAULT 0,
   is_whitelist INTEGER DEFAULT 0,

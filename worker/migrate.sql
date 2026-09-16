@@ -3,6 +3,9 @@
 ALTER TABLE tweets ADD COLUMN moni_score INTEGER;
 ALTER TABLE tweets ADD COLUMN wl_spots INTEGER;
 ALTER TABLE tweets ADD COLUMN follower_count INTEGER;
+ALTER TABLE tweets ADD COLUMN link_risk_level TEXT;
+ALTER TABLE tweets ADD COLUMN link_risk_score INTEGER;
+ALTER TABLE tweets ADD COLUMN link_risk_reasons TEXT;
 ALTER TABLE tweets ADD COLUMN is_giveaway INTEGER DEFAULT 0;
 ALTER TABLE tweets ADD COLUMN is_raffle INTEGER DEFAULT 0;
 ALTER TABLE tweets ADD COLUMN is_wl_giveaway INTEGER DEFAULT 0;

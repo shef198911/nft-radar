@@ -1,3 +1,5 @@
+import { analyzeLinkRisk } from './link-risk.js';
+
 export function parseTweet(payload) {
   const text = payload.text || '';
   const lower = text.toLowerCase();
@@ -129,6 +131,8 @@ export function parseTweet(payload) {
      if (payload.username && lowerUrl.includes(payload.username.toLowerCase()) && !lowerUrl.includes('x.com')) official_link = true;
   });
 
+  const linkRisk = analyzeLinkRisk(payload.links || []);
+
   return {
     ...payload,
     moni_score: payload.moni_score !== undefined ? payload.moni_score : null,
@@ -154,6 +158,7 @@ export function parseTweet(payload) {
     is_robinhood,
     is_verified: payload.is_verified || false,
     has_mint_link: mint_link,
-    has_official_link: official_link
+    has_official_link: official_link,
+    ...linkRisk
   };
 }
