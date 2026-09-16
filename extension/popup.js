@@ -4,12 +4,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnSettings = document.getElementById('btn-settings');
   const btnResetStats = document.getElementById('btn-reset-stats');
   const btnToggleMoni = document.getElementById('btn-toggle-moni');
+  const btnSaveMin = document.getElementById('btn-save-min');
+  const moniMinInput = document.getElementById('moni-min-input');
   
   const statusText = document.getElementById('status-text');
   const statusDot = document.getElementById('status-dot');
   const queueCount = document.getElementById('queue-count');
   const failedCount = document.getElementById('failed-count');
   const queryText = document.getElementById('current-query');
+
+  // Initialize input value once on load
+  chrome.storage.local.get(['settings'], (res) => {
+     const s = res.settings || {};
+     moniMinInput.value = s.moniFilterMinScore !== undefined ? s.moniFilterMinScore : 1000;
+  });
 
   function refreshData() {
     chrome.runtime.sendMessage({ type: 'GET_STATE' }, (res) => {
@@ -24,15 +32,11 @@ document.addEventListener('DOMContentLoaded', () => {
       queueCount.innerText = res.queue ? res.queue.filter(q => q.status !== 'failed').length : 0;
       failedCount.innerText = res.queue ? res.queue.filter(q => q.status === 'failed').length : 0;
       
-      chrome.storage.local.get(['settings'], (sRes) => {
-         let currentQ = '-';
-         // Wait, queriesList is not directly in settings. We need it from res.state or res.queriesList.
-         // In service worker GET_STATE returns { state, queue, queriesLength }
-         if (res.state.currentQueryIndex !== undefined) {
-             currentQ = `Index: ${res.state.currentQueryIndex + 1}/${res.queriesLength}`;
-         }
-         queryText.innerText = currentQ;
-      });
+      let currentQ = '-';
+      if (res.state.currentQueryIndex !== undefined) {
+          currentQ = `Index: ${res.state.currentQueryIndex + 1}/${res.queriesLength}`;
+      }
+      queryText.innerText = currentQ;
     });
     
     chrome.storage.local.get(['radarStats', 'settings'], (res) => {
@@ -48,7 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
        const moniEnabled = s.moniFilterEnabled !== false;
        document.getElementById('moni-status').innerText = moniEnabled ? 'ON' : 'OFF';
        document.getElementById('moni-status').style.color = moniEnabled ? 'green' : 'red';
-       document.getElementById('moni-min').innerText = s.moniFilterMinScore || 1000;
        
        btnToggleMoni.innerText = moniEnabled ? 'Turn OFF' : 'Turn ON';
     });
@@ -76,7 +79,25 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.get(['settings'], (res) => {
        let s = res.settings || {};
        s.moniFilterEnabled = s.moniFilterEnabled === false ? true : false;
-       chrome.storage.local.set({ settings: s }, () => refreshData());
+       chrome.storage.local.set({ settings: s }, () => {
+         chrome.runtime.sendMessage({ type: 'UPDATE_SETTINGS', settings: s });
+         refreshData();
+       });
+    });
+  });
+  
+  btnSaveMin.addEventListener('click', () => {
+    const minVal = parseInt(moniMinInput.value, 10);
+    if (isNaN(minVal)) return;
+    chrome.storage.local.get(['settings'], (res) => {
+       let s = res.settings || {};
+       s.moniFilterMinScore = minVal;
+       chrome.storage.local.set({ settings: s }, () => {
+         chrome.runtime.sendMessage({ type: 'UPDATE_SETTINGS', settings: s });
+         const saveStatus = document.getElementById('save-status');
+         saveStatus.style.display = 'inline';
+         setTimeout(() => { saveStatus.style.display = 'none'; }, 2000);
+       });
     });
   });
 });

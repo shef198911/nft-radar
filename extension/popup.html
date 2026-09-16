@@ -31,7 +31,11 @@
 
   <div class="moni-box">
     <strong>Moni Filter: <span id="moni-status">ON</span></strong><br>
-    Min Score: <span id="moni-min">1000</span><br>
+    <div style="margin-top: 5px; margin-bottom: 5px;">
+      Min Score: <input type="number" id="moni-min-input" style="width: 60px; padding: 2px;">
+      <button id="btn-save-min" style="display: inline-block; width: auto; padding: 2px 8px; margin: 0; margin-left: 5px;">Save</button>
+      <span id="save-status" style="color: green; font-size: 11px; margin-left: 5px; display: none;">Saved!</span>
+    </div>
     <button id="btn-toggle-moni" style="margin-top: 5px; padding: 5px;">Turn OFF</button>
   </div>
 
