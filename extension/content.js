@@ -63,6 +63,40 @@ function updateStats(key) {
    });
 }
 
+function toSettingNumber(value, fallback) {
+    const parsed = parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getQualitySettings(settings = {}) {
+    return {
+        moniFilterEnabled: settings.moniFilterEnabled !== false,
+        moniFilterMinScore: toSettingNumber(settings.moniFilterMinScore, 1000),
+        moniFilterIfUnavailable: settings.moniFilterIfUnavailable || 'reject',
+        minFollowers: toSettingNumber(settings.minFollowers, 0)
+    };
+}
+
+function passesQualityGate(data, settings = {}) {
+    const s = getQualitySettings(settings);
+    const moniScore = data.moni_score;
+    const followerCount = data.follower_count;
+
+    const passFollowers = s.minFollowers > 0
+        && followerCount !== null
+        && followerCount !== undefined
+        && Number(followerCount) >= s.minFollowers;
+
+    let passMoni = false;
+    if (s.moniFilterEnabled) {
+        passMoni = (moniScore !== null && moniScore !== undefined && Number(moniScore) >= s.moniFilterMinScore)
+            || (moniScore === null && s.moniFilterIfUnavailable === 'allow');
+    }
+
+    const bothDisabled = !s.moniFilterEnabled && s.minFollowers === 0;
+    return bothDisabled || passFollowers || passMoni;
+}
+
 let hoverQueue = [];
 let isProcessingHoverQueue = false;
 
@@ -129,26 +163,12 @@ function processArticles(articles, isInitial = false) {
         return new Promise((resolve) => {
             chrome.storage.local.get(['settings'], (res) => {
                const s = res.settings || {};
-               const isMoniEnabled = s.moniFilterEnabled !== false;
-               const minScore = s.moniFilterMinScore || 1000;
-               const ifUnavail = s.moniFilterIfUnavailable || 'reject';
-               const minFollowers = s.minFollowers || 0;
-               
-               let passFollowers = false;
-               if (minFollowers > 0 && followerCount !== null && followerCount >= minFollowers) {
-                   passFollowers = true;
-               }
-               
-               let passMoni = false;
-               if (isMoniEnabled) {
-                   if (moni_score !== null && moni_score >= minScore) passMoni = true;
-                   if (moni_score === null && ifUnavail === 'allow') passMoni = true;
-               }
-               
-               const bothDisabled = (!isMoniEnabled && minFollowers === 0);
-               
-               if (!bothDisabled && !passFollowers && !passMoni) {
+               const qualitySettings = getQualitySettings(s);
+               data.quality_filter = qualitySettings;
+
+               if (!passesQualityGate(data, qualitySettings)) {
                    updateStats('rejected');
+                   console.log(`[RADAR] Quality rejected: ${data.tweet_id}, Moni: ${moni_score}, Followers: ${followerCount}`);
                    resolve();
                    return;
                }

@@ -30,7 +30,8 @@ let settings = {
   maxScrolls: 15,
   moniFilterEnabled: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterEnabled : true),
   moniFilterMinScore: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterMinScore : 1000),
-  moniFilterIfUnavailable: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterIfUnavailable : 'reject')
+  moniFilterIfUnavailable: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterIfUnavailable : 'reject'),
+  minFollowers: (typeof CONFIG !== 'undefined' ? (CONFIG.minFollowers || 0) : 0)
 };
 
 let tweetQueue = [];
@@ -77,6 +78,45 @@ function logInfo(msg) {
 function logError(msg) {
    console.error(`[ERROR][RADAR] ${msg}`);
    chrome.runtime.sendMessage({ type: 'LOG_ERROR', message: msg }).catch(()=>null);
+}
+
+function toSettingNumber(value, fallback) {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getQualitySettings(settingsSource = {}) {
+  return {
+    moniFilterEnabled: settingsSource.moniFilterEnabled !== false,
+    moniFilterMinScore: toSettingNumber(settingsSource.moniFilterMinScore, 1000),
+    moniFilterIfUnavailable: settingsSource.moniFilterIfUnavailable || 'reject',
+    minFollowers: toSettingNumber(settingsSource.minFollowers, 0)
+  };
+}
+
+function passesQualityGate(tweet, settingsSource = {}) {
+  const s = getQualitySettings(settingsSource);
+  const moniScore = tweet.moni_score;
+  const followerCount = tweet.follower_count;
+
+  const passFollowers = s.minFollowers > 0
+    && followerCount !== null
+    && followerCount !== undefined
+    && Number(followerCount) >= s.minFollowers;
+
+  let passMoni = false;
+  if (s.moniFilterEnabled) {
+    passMoni = (moniScore !== null && moniScore !== undefined && Number(moniScore) >= s.moniFilterMinScore)
+      || (moniScore === null && s.moniFilterIfUnavailable === 'allow');
+  }
+
+  const bothDisabled = !s.moniFilterEnabled && s.minFollowers === 0;
+  return bothDisabled || passFollowers || passMoni;
+}
+
+function removeQueueItem(item) {
+  const idx = tweetQueue.indexOf(item);
+  if (idx !== -1) tweetQueue.splice(idx, 1);
 }
 
 chrome.storage.local.get(['state', 'settings', 'queue'], (res) => {
@@ -251,6 +291,15 @@ async function processQueue() {
   }
 
   const tweet = item.payload;
+  if (!passesQualityGate(tweet, settings)) {
+    logInfo(`Dropping queued tweet ${tweet.tweet_id}: Moni ${tweet.moni_score ?? 'n/a'}, Followers ${tweet.follower_count ?? 'n/a'} below current filters`);
+    removeQueueItem(item);
+    await saveState();
+    sending = false;
+    scheduleQueue(2000);
+    return;
+  }
+
     try {
       logInfo(`Sending tweet ${tweet.tweet_id}...`);
       const baseUrl = settings.workerUrl.endsWith('/') ? settings.workerUrl + 'ingest' : settings.workerUrl + '/ingest';
@@ -269,13 +318,11 @@ async function processQueue() {
       if (response.ok) logInfo(`Worker response 200 for ${tweet.tweet_id}`);
       else logInfo(`Duplicate ${tweet.tweet_id}, dropping from queue`);
       
-      const idx = tweetQueue.indexOf(item);
-      if (idx !== -1) tweetQueue.splice(idx, 1);
+      removeQueueItem(item);
       await saveState();
     } else if (response.status === 400) {
       logError(`Worker rejected payload 400 for ${tweet.tweet_id}`);
-      const idx = tweetQueue.indexOf(item);
-      if (idx !== -1) tweetQueue.splice(idx, 1);
+      removeQueueItem(item);
       await saveState();
     } else if (response.status === 401 || response.status === 403) {
       logError(`Worker auth error ${response.status}. Check client key.`);

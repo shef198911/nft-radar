@@ -4,6 +4,7 @@ import { calculateScore } from './scoring.js';
 import { checkDuplicate, saveTweet, markSent } from './dedupe.js';
 import { formatTelegramMessage } from './formatter.js';
 import { sendTelegramMessage } from './telegram.js';
+import { passesQualityGate } from './quality-gate.js';
 
 const router = Router();
 
@@ -248,7 +249,7 @@ router.post('/ingest', async (request, env) => {
     if (existing.sent_to_telegram === 0) {
        const scored = calculateScore(parseTweet(payload));
        const minScore = parseInt(env.MIN_TELEGRAM_SCORE || '50', 10);
-       if (scored.score >= minScore) {
+       if (scored.score >= minScore && passesQualityGate(scored)) {
            const msg = formatTelegramMessage(scored);
            if (msg) {
               const replyMarkup = {
@@ -269,7 +270,7 @@ router.post('/ingest', async (request, env) => {
   await saveTweet(env.DB, scored);
 
   const minScore = parseInt(env.MIN_TELEGRAM_SCORE || '50', 10);
-  if (scored.score >= minScore) {
+  if (scored.score >= minScore && passesQualityGate(scored)) {
     const message = formatTelegramMessage(scored);
     if (message) {
       const replyMarkup = {

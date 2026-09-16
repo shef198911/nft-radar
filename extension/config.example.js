@@ -3,6 +3,7 @@ const CONFIG = {
   clientKey: 'replace-with-your-client-key',
   moniFilterEnabled: true,
   moniFilterMinScore: 1000,
+  minFollowers: 0,
   moniFilterIfUnavailable: 'reject'
 };
 

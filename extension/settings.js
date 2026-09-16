@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   const moniFilterEnabled = document.getElementById('moniFilterEnabled');
   const moniFilterMinScore = document.getElementById('moniFilterMinScore');
+  const minFollowers = document.getElementById('minFollowers');
   const moniFilterIfUnavailable = document.getElementById('moniFilterIfUnavailable');
   
   const saveBtn = document.getElementById('save');
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     moniFilterEnabled.checked = settings.moniFilterEnabled !== undefined ? settings.moniFilterEnabled : (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterEnabled : true);
     moniFilterMinScore.value = settings.moniFilterMinScore !== undefined ? settings.moniFilterMinScore : (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterMinScore : 1000);
+    minFollowers.value = settings.minFollowers !== undefined ? settings.minFollowers : (typeof CONFIG !== 'undefined' ? (CONFIG.minFollowers || 0) : 0);
     moniFilterIfUnavailable.value = settings.moniFilterIfUnavailable || (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterIfUnavailable : 'reject');
   });
 
@@ -32,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
       maxScrolls: parseInt(maxScrollsInput.value, 10),
       moniFilterEnabled: moniFilterEnabled.checked,
       moniFilterMinScore: parseInt(moniFilterMinScore.value, 10) || 0,
+      minFollowers: parseInt(minFollowers.value, 10) || 0,
       moniFilterIfUnavailable: moniFilterIfUnavailable.value
     };
 
