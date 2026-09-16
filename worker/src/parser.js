@@ -1,5 +1,6 @@
 import { analyzeLinkRisk } from './link-risk.js';
 import { normalizeOpportunity } from './opportunity-gate.js';
+import { buildProjectKey } from './project-key.js';
 
 export function parseTweet(payload) {
   const text = payload.text || '';
@@ -140,7 +141,7 @@ export function parseTweet(payload) {
 
   const linkRisk = analyzeLinkRisk(payload.links || []);
 
-  return normalizeOpportunity({
+  const normalized = normalizeOpportunity({
     ...payload,
     moni_score: payload.moni_score !== undefined ? payload.moni_score : null,
     chain,
@@ -168,4 +169,9 @@ export function parseTweet(payload) {
     has_official_link: official_link,
     ...linkRisk
   });
+
+  return {
+    ...normalized,
+    project_key: buildProjectKey(normalized)
+  };
 }

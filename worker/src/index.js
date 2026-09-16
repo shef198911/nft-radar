@@ -6,6 +6,7 @@ import { formatTelegramMessage } from './formatter.js';
 import { sendTelegramMessage } from './telegram.js';
 import { passesQualityGate } from './quality-gate.js';
 import { canSendOpportunity } from './opportunity-gate.js';
+import { getProjectAlertStatus } from './project-dedupe.js';
 
 const router = Router();
 
@@ -101,6 +102,45 @@ function parseLimit(value, fallback = 25, max = 50) {
   const parsed = parseInt(value || '', 10);
   if (Number.isNaN(parsed) || parsed <= 0) return fallback;
   return Math.min(parsed, max);
+}
+
+function getProjectDedupeHours(env) {
+  const parsed = parseInt(env.PROJECT_DEDUPE_HOURS || '48', 10);
+  if (Number.isNaN(parsed) || parsed <= 0) return 48;
+  return Math.min(parsed, 168);
+}
+
+function getProjectMaxAuthors(env) {
+  const parsed = parseInt(env.PROJECT_MAX_AUTHORS || '3', 10);
+  if (Number.isNaN(parsed) || parsed <= 0) return 3;
+  return Math.min(parsed, 10);
+}
+
+async function shouldSendTelegram(db, env, scored) {
+  const minScore = parseInt(env.MIN_TELEGRAM_SCORE || '50', 10);
+  if (scored.score < minScore) return { ok: false, reason: 'score' };
+  if (!passesQualityGate(scored)) return { ok: false, reason: 'quality' };
+  if (!canSendOpportunity(scored)) return { ok: false, reason: 'not_actionable' };
+
+  const projectAlertStatus = await getProjectAlertStatus(
+    db,
+    scored.project_key,
+    scored.tweet_id,
+    scored.username,
+    getProjectDedupeHours(env),
+    getProjectMaxAuthors(env)
+  );
+
+  if (!projectAlertStatus?.ok) {
+    return {
+      ok: false,
+      reason: projectAlertStatus?.reason || 'project_duplicate',
+      duplicate: projectAlertStatus?.duplicate,
+      author_count: projectAlertStatus?.author_count
+    };
+  }
+
+  return { ok: true };
 }
 
 router.get('/health', async (request, env) => {
@@ -249,8 +289,8 @@ router.post('/ingest', async (request, env) => {
   if (existing) {
     if (existing.sent_to_telegram === 0) {
        const scored = calculateScore(parseTweet(payload));
-       const minScore = parseInt(env.MIN_TELEGRAM_SCORE || '50', 10);
-       if (scored.score >= minScore && passesQualityGate(scored) && canSendOpportunity(scored)) {
+       const sendDecision = await shouldSendTelegram(env.DB, env, scored);
+       if (sendDecision.ok) {
            const msg = formatTelegramMessage(scored);
            if (msg) {
               const replyMarkup = {
@@ -260,7 +300,7 @@ router.post('/ingest', async (request, env) => {
               if (tgRes.ok) await markSent(env.DB, payload.tweet_id, formatTelegramMessageIds(tgRes.results));
            }
         }
-       return new Response(JSON.stringify({ status: 'retry_attempted' }), { headers: { 'Content-Type': 'application/json' } });
+       return new Response(JSON.stringify({ status: 'retry_attempted', send_decision: sendDecision.reason || 'sent' }), { headers: { 'Content-Type': 'application/json' } });
     }
     return new Response(JSON.stringify({ status: 'duplicate' }), { status: 409, headers: { 'Content-Type': 'application/json' } });
   }
@@ -270,8 +310,8 @@ router.post('/ingest', async (request, env) => {
 
   await saveTweet(env.DB, scored);
 
-  const minScore = parseInt(env.MIN_TELEGRAM_SCORE || '50', 10);
-  if (scored.score >= minScore && passesQualityGate(scored) && canSendOpportunity(scored)) {
+  const sendDecision = await shouldSendTelegram(env.DB, env, scored);
+  if (sendDecision.ok) {
     const message = formatTelegramMessage(scored);
     if (message) {
       const replyMarkup = {
@@ -284,7 +324,12 @@ router.post('/ingest', async (request, env) => {
     }
   }
 
-  return new Response(JSON.stringify({ status: 'ok', score: scored.score }), {
+  return new Response(JSON.stringify({
+    status: 'ok',
+    score: scored.score,
+    project_key: scored.project_key,
+    send_decision: sendDecision.reason || 'sent'
+  }), {
     headers: { 'Content-Type': 'application/json' }
   });
 });

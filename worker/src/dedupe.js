@@ -15,7 +15,7 @@ export async function saveTweet(db, data) {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     data.tweet_id, data.tweet_url, data.username, data.display_name, data.text,
-    detected_at, data.score, data.priority, data.username, data.chain,
+    detected_at, data.score, data.priority, data.project_key || data.username, data.chain,
     data.mint_type, data.opportunity_type, data.mint_date, data.mint_time, data.mint_time_raw, data.project_name, data.supply, data.price, data.follower_count || null,
     data.link_risk_level || 'OK', data.link_risk_score || 0, JSON.stringify(data.link_risk_reasons || []),
     data.is_free, data.is_whitelist, data.is_allowlist, data.is_fcfs, data.is_gtd, data.is_robinhood,
