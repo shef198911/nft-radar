@@ -15,3 +15,9 @@ ALTER TABLE tweets ADD COLUMN is_giveaway INTEGER DEFAULT 0;
 ALTER TABLE tweets ADD COLUMN is_raffle INTEGER DEFAULT 0;
 ALTER TABLE tweets ADD COLUMN is_wl_giveaway INTEGER DEFAULT 0;
 ALTER TABLE tweets ADD COLUMN is_wl_raffle INTEGER DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS daily_summaries (
+  summary_date TEXT PRIMARY KEY,
+  sent_at TEXT NOT NULL,
+  telegram_message_id TEXT
+);

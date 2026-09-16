@@ -58,3 +58,9 @@ CREATE INDEX IF NOT EXISTS idx_tweets_score ON tweets(score);
 CREATE INDEX IF NOT EXISTS idx_tweets_chain ON tweets(chain);
 CREATE INDEX IF NOT EXISTS idx_tweets_detected ON tweets(detected_at);
 CREATE INDEX IF NOT EXISTS idx_tweets_project ON tweets(project_key);
+
+CREATE TABLE IF NOT EXISTS daily_summaries (
+  summary_date TEXT PRIMARY KEY,
+  sent_at TEXT NOT NULL,
+  telegram_message_id TEXT
+);

@@ -7,6 +7,12 @@ import { sendTelegramMessage } from './telegram.js';
 import { passesQualityGate } from './quality-gate.js';
 import { canSendOpportunity } from './opportunity-gate.js';
 import { getProjectAlertStatus } from './project-dedupe.js';
+import {
+  buildDailySummary,
+  formatDailySummaryMessage,
+  getDailySummaryRecord,
+  recordDailySummarySent
+} from './daily-summary.js';
 
 const router = Router();
 
@@ -143,6 +149,34 @@ async function shouldSendTelegram(db, env, scored) {
   return { ok: true };
 }
 
+async function sendDailySummary(env, now = new Date(), options = {}) {
+  const summary = await buildDailySummary(env.DB, now);
+  const message = formatDailySummaryMessage(summary);
+
+  if (options.dryRun) {
+    return { ok: true, dry_run: true, summary, message };
+  }
+
+  if (!options.force) {
+    const existing = await getDailySummaryRecord(env.DB, summary.summaryDate);
+    if (existing) {
+      return { ok: true, skipped: true, reason: 'already_sent', summary };
+    }
+  }
+
+  if (summary.totalItems === 0) {
+    await recordDailySummarySent(env.DB, summary.summaryDate, 'empty');
+    return { ok: true, skipped: true, reason: 'empty', summary };
+  }
+
+  const tgRes = await sendTelegramBroadcast(env, message);
+  if (tgRes.ok) {
+    await recordDailySummarySent(env.DB, summary.summaryDate, formatTelegramMessageIds(tgRes.results));
+  }
+
+  return { ok: tgRes.ok, telegram: tgRes, summary };
+}
+
 router.get('/health', async (request, env) => {
   let dbStatus = 'ok';
   try {
@@ -181,6 +215,25 @@ router.get('/stats', async (request, env) => {
       sent_today: sent ? sent.count : 0
     }), { headers: { 'Content-Type': 'application/json' } });
   } catch(e) {
+    return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+  }
+});
+
+router.get('/daily-summary', async (request, env) => {
+  if (!isAuthorized(request, env)) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const url = new URL(request.url);
+  const dryRun = url.searchParams.get('dry') !== '0';
+  const force = url.searchParams.get('force') === '1';
+
+  try {
+    const result = await sendDailySummary(env, new Date(), { dryRun, force });
+    return new Response(JSON.stringify(result), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });
   }
 });
@@ -362,5 +415,10 @@ export default {
     } catch (e) {
       return new Response('Internal error: ' + e.message, { status: 500, headers: corsHeaders });
     }
+  },
+
+  async scheduled(controller, env, ctx) {
+    const scheduledAt = controller?.scheduledTime ? new Date(controller.scheduledTime) : new Date();
+    ctx.waitUntil(sendDailySummary(env, scheduledAt));
   }
 };
