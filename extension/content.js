@@ -4,6 +4,57 @@ const MAX_PROCESSED_IDS = 10000;
 let debounceTimer = null;
 let newTweetsInCurrentScroll = 0;
 
+function parseTwitterNumber(str) {
+    if (!str) return null;
+    let s = str.toUpperCase().replace(/,/g, '').trim();
+    let mult = 1;
+    if (s.endsWith('K')) { mult = 1000; s = s.slice(0, -1); }
+    if (s.endsWith('M')) { mult = 1000000; s = s.slice(0, -1); }
+    const val = parseFloat(s);
+    return isNaN(val) ? null : Math.floor(val * mult);
+}
+
+window.getFollowerCountViaHover = async function(username, articleNode) {
+    const trigger = articleNode.querySelector(`a[href^="/${username}"]`);
+    if (!trigger) return null;
+
+    trigger.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+    trigger.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+    trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+
+    return new Promise((resolve) => {
+        let attempts = 0;
+        const maxAttempts = 20; 
+        
+        const check = () => {
+            const followerLink = document.querySelector(`#layers a[href="/${username}/followers"]`);
+            if (followerLink) {
+                const text = followerLink.innerText || "";
+                const match = text.match(/[\d,.]+[KMkm]?/);
+                let count = null;
+                if (match) count = parseTwitterNumber(match[0]);
+                
+                trigger.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+                trigger.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+                trigger.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+                
+                setTimeout(() => resolve(count), 200);
+                return;
+            }
+            
+            attempts++;
+            if (attempts >= maxAttempts) {
+                trigger.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+                trigger.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+                resolve(null);
+            } else {
+                setTimeout(check, 100);
+            }
+        };
+        setTimeout(check, 100);
+    });
+};
+
 function updateStats(key) {
    chrome.storage.local.get(['radarStats'], (res) => {
       let stats = res.radarStats || { tweetsSeen: 0, localPassed: 0, moniChecked: 0, moniPassed: 0, rejected: 0, sent: 0 };
@@ -54,12 +105,22 @@ function processTweets() {
     const moni_score = await window.getMoniScore(data.username, article);
     data.moni_score = moni_score;
     
-    // Request current settings to check moni filter
+    // Check Followers via Hover Card
+    const followerCount = await window.getFollowerCountViaHover(data.username, article);
+    data.follower_count = followerCount;
+    
+    // Request current settings to check filters
     chrome.storage.local.get(['settings'], (res) => {
        const s = res.settings || {};
        const isMoniEnabled = s.moniFilterEnabled !== false;
        const minScore = s.moniFilterMinScore || 1000;
        const ifUnavail = s.moniFilterIfUnavailable || 'reject';
+       const minFollowers = s.minFollowers || 0; // Default 0 if not set
+       
+       if (followerCount !== null && followerCount < minFollowers) {
+           updateStats('rejected');
+           return;
+       }
        
        if (isMoniEnabled) {
           if (moni_score === null && ifUnavail === 'reject') { updateStats('rejected'); return; }
@@ -68,8 +129,8 @@ function processTweets() {
        
        updateStats('moniPassed');
        updateStats('sent');
-       console.log(`[RADAR] Found relevant tweet: ${data.tweet_id}, Moni: ${moni_score}`);
-       chrome.runtime.sendMessage({ type: 'NEW_TWEET', payload: data });
+       console.log(`[RADAR] Found relevant tweet: ${data.tweet_id}, Moni: ${moni_score}, Followers: ${followerCount}`);
+       chrome.runtime.sendMessage({ type: 'TRANSLATE_AND_ENQUEUE', payload: data });
     });
   });
 }
@@ -114,17 +175,27 @@ function startObserver() {
     const moni_score = await window.getMoniScore(data.username, article);
     data.moni_score = moni_score;
     
+    const followerCount = await window.getFollowerCountViaHover(data.username, article);
+    data.follower_count = followerCount;
+    
     chrome.storage.local.get(['settings'], (res) => {
        const s = res.settings || {};
        const ifUnavail = s.moniFilterIfUnavailable || 'reject';
+       const minFollowers = s.minFollowers || 0;
+       
+       if (followerCount !== null && followerCount < minFollowers) {
+           updateStats('rejected');
+           return;
+       }
+       
        if (s.moniFilterEnabled !== false) {
           if (moni_score === null && ifUnavail === 'reject') { updateStats('rejected'); return; }
           if (moni_score !== null && moni_score < (s.moniFilterMinScore || 1000)) { updateStats('rejected'); return; }
        }
        updateStats('moniPassed');
        updateStats('sent');
-       console.log(`[RADAR] Found relevant tweet (initial): ${data.tweet_id}, Moni: ${moni_score}`);
-       chrome.runtime.sendMessage({ type: 'NEW_TWEET', payload: data });
+       console.log(`[RADAR] Found relevant tweet (initial): ${data.tweet_id}, Moni: ${moni_score}, Followers: ${followerCount}`);
+       chrome.runtime.sendMessage({ type: 'TRANSLATE_AND_ENQUEUE', payload: data });
     });
   });
   

@@ -7,23 +7,7 @@ function escapeHTML(str) {
             .replace(/"/g, '&quot;');
 }
 
-async function translateToRussian(text) {
-  if (!text) return '';
-  try {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ru&dt=t&q=${encodeURIComponent(text)}`;
-    const res = await fetch(url);
-    const json = await res.json();
-    if (json && json[0]) {
-       return json[0].map(segment => segment[0]).join('');
-    }
-    return text;
-  } catch (e) {
-    console.error('Translation error:', e);
-    return text;
-  }
-}
-
-export async function formatTelegramMessage(data) {
+export function formatTelegramMessage(data) {
   let emoji = '🟢';
   if (data.priority === 'HOT') emoji = '🔥';
   else if (data.priority === 'HIGH') emoji = '🟡';
@@ -82,10 +66,12 @@ export async function formatTelegramMessage(data) {
   
   msg += `⭐ <b>Radar Score:</b> ${data.score}/100\n\n`;
 
-  if (data.text) {
-    let snippet = data.text.length > 150 ? data.text.substring(0, 150) + '...' : data.text;
-    const translatedSnippet = await translateToRussian(snippet);
-    msg += `📝 <i>"${escapeHTML(translatedSnippet)}"</i>\n\n`;
+  if (data.translated_text) {
+    let snippet = data.translated_text.length > 250 ? data.translated_text.substring(0, 250) + '...' : data.translated_text;
+    msg += `📝 <i>"${escapeHTML(snippet)}"</i>\n\n`;
+  } else if (data.text) {
+    let snippet = data.text.length > 250 ? data.text.substring(0, 250) + '...' : data.text;
+    msg += `📝 <i>"${escapeHTML(snippet)}"</i>\n\n`;
   }
   
   msg += `🔗 <a href="${data.tweet_url}"><b>Original Tweet</b></a>`;

@@ -72,7 +72,7 @@ router.post('/ingest', async (request, env) => {
        const scored = calculateScore(parseTweet(payload));
        const minScore = parseInt(env.MIN_TELEGRAM_SCORE || '50', 10);
        if (scored.score >= minScore) {
-           const msg = await formatTelegramMessage(scored);
+           const msg = formatTelegramMessage(scored);
            if (msg) {
               const tgRes = await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, msg);
               if (tgRes.ok) await markSent(env.DB, payload.tweet_id, tgRes.message_id);
@@ -90,7 +90,7 @@ router.post('/ingest', async (request, env) => {
 
   const minScore = parseInt(env.MIN_TELEGRAM_SCORE || '50', 10);
   if (scored.score >= minScore) {
-    const message = await formatTelegramMessage(scored);
+    const message = formatTelegramMessage(scored);
     if (message) {
       const tgRes = await sendTelegramMessage(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID, message);
       if (tgRes.ok) {

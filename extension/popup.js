@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnToggleMoni = document.getElementById('btn-toggle-moni');
   const btnSaveMin = document.getElementById('btn-save-min');
   const moniMinInput = document.getElementById('moni-min-input');
+  const followMinInput = document.getElementById('follow-min-input');
   
   const statusText = document.getElementById('status-text');
   const statusDot = document.getElementById('status-dot');
@@ -17,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.local.get(['settings'], (res) => {
      const s = res.settings || {};
      moniMinInput.value = s.moniFilterMinScore !== undefined ? s.moniFilterMinScore : 1000;
+     followMinInput.value = s.minFollowers !== undefined ? s.minFollowers : 0;
   });
 
   function refreshData() {
@@ -92,10 +94,12 @@ document.addEventListener('DOMContentLoaded', () => {
   
   btnSaveMin.addEventListener('click', () => {
     const minVal = parseInt(moniMinInput.value, 10);
-    if (isNaN(minVal)) return;
+    const followVal = parseInt(followMinInput.value, 10);
+    if (isNaN(minVal) || isNaN(followVal)) return;
     chrome.storage.local.get(['settings'], (res) => {
        let s = res.settings || {};
        s.moniFilterMinScore = minVal;
+       s.minFollowers = followVal;
        chrome.storage.local.set({ settings: s }, () => {
          chrome.runtime.sendMessage({ type: 'UPDATE_SETTINGS', settings: s });
          const saveStatus = document.getElementById('save-status');

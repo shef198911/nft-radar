@@ -151,10 +151,30 @@ async function processQueue() {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'NEW_TWEET') {
+    // legacy fallback
+  }
+  
+  if (msg.type === 'TRANSLATE_AND_ENQUEUE') {
     const tweetId = msg.payload.tweet_id;
-    chrome.storage.local.get(['processed_' + tweetId], (res) => {
+    chrome.storage.local.get(['processed_' + tweetId], async (res) => {
       if (!res['processed_' + tweetId]) {
         chrome.storage.local.set({ ['processed_' + tweetId]: true });
+        
+        // Translate snippet client-side (no CF block)
+        if (msg.payload.text) {
+           let snippet = msg.payload.text.length > 250 ? msg.payload.text.substring(0, 250) + '...' : msg.payload.text;
+           try {
+             const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ru&dt=t&q=${encodeURIComponent(snippet)}`;
+             const tres = await fetch(url);
+             const json = await tres.json();
+             if (json && json[0]) {
+                msg.payload.translated_text = json[0].map(segment => segment[0]).join('');
+             }
+           } catch(e) {
+             console.error("Translation fail", e);
+           }
+        }
+        
         tweetQueue.push({ payload: msg.payload, retryCount: 0, nextRetry: Date.now(), status: 'pending' });
         saveState();
         processQueue();
