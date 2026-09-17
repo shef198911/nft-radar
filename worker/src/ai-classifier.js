@@ -111,7 +111,7 @@ ${tweetText}
       }
 
       // Check if glm is available or use llama
-      const res = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+      const res = await env.AI.run('@cf/zai-org/glm-4.7-flash', {
         messages: [
           { role: 'system', content: prompt }
         ]
@@ -122,6 +122,12 @@ ${tweetText}
       const match = text.match(/```(?:json)?\n([\s\S]*?)\n```/);
       if (match) {
         jsonStr = match[1];
+      } else {
+        const start = text.indexOf('{');
+        const end = text.lastIndexOf('}');
+        if (start !== -1 && end !== -1 && end >= start) {
+          jsonStr = text.substring(start, end + 1);
+        }
       }
 
       const cfResult = JSON.parse(jsonStr);
