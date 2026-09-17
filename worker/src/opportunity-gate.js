@@ -33,11 +33,28 @@ const ACTION_PATTERNS = [
   /\bjoin (?:the )?(?:wl|whitelist|allowlist)\b/i
 ];
 
+const NON_OPPORTUNITY_PATTERNS = [
+  /\bfree\s+mint\s+bot\b/i,
+  /\bmint\s+bot\b/i,
+  /\bbot\s+is\s+ready\b/i,
+  /\btesting\b[\s\S]{0,80}\bmint\b/i,
+  /\bmint\b[\s\S]{0,80}\btesting\b/i,
+  /\byou\s+need\b[\s\S]{0,80}\bnft\b/i,
+  /\bholders?\s+only\b/i,
+  /\bholders?\s+(?:will|get|can|receive|have)\b[\s\S]{0,80}\baccess\b/i,
+  /\bholder\s+gated\b/i
+];
+
+export function isNonOpportunityText(text) {
+  return NON_OPPORTUNITY_PATTERNS.some((pattern) => pattern.test(text || ''));
+}
+
 export function normalizeOpportunity(parsed) {
   const text = parsed.text || '';
   const priceMatch = text.match(PAID_PRICE_RE);
   const hasPaidPrice = Boolean(priceMatch);
   const isDiscussion = DISCUSSION_PATTERNS.some((pattern) => pattern.test(text));
+  const isBlockedNonOpportunity = isNonOpportunityText(text);
   const hasActionIntent = ACTION_PATTERNS.some((pattern) => pattern.test(text))
     || parsed.has_mint_link
     || parsed.wl_spots
@@ -47,10 +64,11 @@ export function normalizeOpportunity(parsed) {
     ...parsed,
     has_paid_price: hasPaidPrice,
     price: parsed.price || (hasPaidPrice ? priceMatch[0].toUpperCase() : parsed.price),
-    is_free: parsed.free_scope === 'all' ? 1 : 0,
-    mint_type: hasPaidPrice && parsed.mint_type === 'FREE_MINT' ? 'PAID_MINT' : parsed.mint_type,
+    is_free: !isBlockedNonOpportunity && parsed.free_scope === 'all' ? 1 : 0,
+    mint_type: isBlockedNonOpportunity ? 'UNKNOWN' : (hasPaidPrice && parsed.mint_type === 'FREE_MINT' ? 'PAID_MINT' : parsed.mint_type),
+    opportunity_type: isBlockedNonOpportunity ? 'UNKNOWN' : parsed.opportunity_type,
     is_discussion: isDiscussion ? 1 : 0,
-    is_actionable_opportunity: (!parsed.is_reply && !isDiscussion && hasActionIntent) ? 1 : 0
+    is_actionable_opportunity: (!parsed.is_reply && !isDiscussion && !isBlockedNonOpportunity && hasActionIntent) ? 1 : 0
   };
 }
 

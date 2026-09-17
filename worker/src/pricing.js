@@ -1,5 +1,6 @@
 const PRICE_RE = /(?:0?\.\d*[1-9]\d*|[1-9]\d*(?:\.\d+)?)\s*(?:eth|sol|avax|bnb|matic|usdc)\b/i;
 const FREE_RE = /\b(?:free|0\s*(?:eth|sol|avax|bnb|matic|usdc)|zero\s*(?:eth|sol|avax|bnb|matic|usdc)|no cost)\b/i;
+const NON_FREE_MINT_CONTEXT_RE = /\bfree\s+mint\s+bot\b|\bmint\s+bot\b|\btesting\b[\s\S]{0,80}\bmint\b|\bmint\b[\s\S]{0,80}\btesting\b/i;
 
 function normalizePrice(value) {
   if (!value) return null;
@@ -37,9 +38,11 @@ export function parsePricing(text) {
   const whitelistIsFree = Boolean(whitelistLine && FREE_RE.test(whitelistLine) && !whitelistPrice);
   const subscriberIsFree = Boolean(subscriberLine);
   const publicIsFree = Boolean(publicLine && FREE_RE.test(publicLine) && !publicPrice);
-  const genericFree = /\bfree\s+(?:mint|claim|wl|whitelist)\b/i.test(value)
+  const genericFree = !NON_FREE_MINT_CONTEXT_RE.test(value) && (
+    /\bfree\s+(?:mint|claim|wl|whitelist)\b/i.test(value)
     || /\b(?:mint|claim)\s+is\s+free\b/i.test(value)
-    || /\bfree\s+to\s+mint\b/i.test(value);
+    || /\bfree\s+to\s+mint\b/i.test(value)
+  );
 
   let freeScope = 'none';
   if (publicIsFree || (genericFree && !paidPrice && !publicPrice)) {

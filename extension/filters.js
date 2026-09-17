@@ -6,6 +6,22 @@ function passesLocalFilter(text) {
   if (lowerText.includes('send eth') || lowerText.includes('send crypto') || lowerText.includes('drainer') || lowerText.includes('phishing')) {
      return false;
   }
+
+  const utilityOrHolderGatePatterns = [
+    /\bfree\s+mint\s+bot\b/i,
+    /\bmint\s+bot\b/i,
+    /\bbot\s+is\s+ready\b/i,
+    /\btesting\b[\s\S]{0,80}\bmint\b/i,
+    /\bmint\b[\s\S]{0,80}\btesting\b/i,
+    /\byou\s+need\b[\s\S]{0,80}\bnft\b/i,
+    /\bholders?\s+only\b/i,
+    /\bholders?\s+(?:will|get|can|receive|have)\b[\s\S]{0,80}\baccess\b/i,
+    /\bholder\s+gated\b/i
+  ];
+
+  if (utilityOrHolderGatePatterns.some((pattern) => pattern.test(text))) {
+     return false;
+  }
   
   const isNFT = /\bnfts?\b/i.test(text);
   const isTargetChain = /\brobinhood\b/i.test(text) || lowerText.includes('rh chain') || /\barc\b/i.test(text) || lowerText.includes('arc chain') || /\bsolana\b/i.test(text) || /\bsol\b/i.test(text);
