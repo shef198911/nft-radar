@@ -58,3 +58,15 @@ CREATE TABLE IF NOT EXISTS opensea_api_keys (
   expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS opensea_scan_status (
+  id TEXT PRIMARY KEY,
+  ok INTEGER DEFAULT 0,
+  status TEXT,
+  reason TEXT,
+  error TEXT,
+  drops_count INTEGER DEFAULT 0,
+  sendable_count INTEGER DEFAULT 0,
+  sent_count INTEGER DEFAULT 0,
+  last_scan_at TEXT NOT NULL
+);

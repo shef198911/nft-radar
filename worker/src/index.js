@@ -16,7 +16,9 @@ import {
 import {
   formatOpenSeaDropMessage,
   markOpenSeaDropSent,
-  scanOpenSeaDrops
+  scanOpenSeaDrops,
+  recordOpenSeaScanStatus,
+  getOpenSeaScanStatus
 } from './opensea.js';
 
 const router = Router();
@@ -184,7 +186,12 @@ async function sendDailySummary(env, now = new Date(), options = {}) {
 
 async function runOpenSeaScan(env, options = {}) {
   const result = await scanOpenSeaDrops(env, options);
-  if (!result.ok || options.dryRun) return result;
+  if (!result.ok || options.dryRun) {
+    if (!options.dryRun) {
+      await recordOpenSeaScanStatus(env.DB, result, 0).catch(console.error);
+    }
+    return result;
+  }
 
   const sent = [];
   for (const drop of result.sendable || []) {
@@ -200,6 +207,9 @@ async function runOpenSeaScan(env, options = {}) {
     }
   }
 
+  if (!options.dryRun) {
+    await recordOpenSeaScanStatus(env.DB, result, sent.length).catch(console.error);
+  }
   return { ...result, sent_count: sent.length, sent };
 }
 
@@ -261,6 +271,24 @@ router.get('/daily-summary', async (request, env) => {
     });
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+  }
+});
+
+router.get('/opensea/status', async (request, env) => {
+  if (!isAuthorized(request, env)) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  try {
+    const status = await getOpenSeaScanStatus(env.DB);
+    return new Response(JSON.stringify(status), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: e.message }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 });
 

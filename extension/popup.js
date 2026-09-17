@@ -62,6 +62,42 @@ document.addEventListener('DOMContentLoaded', () => {
   refreshData();
   setInterval(refreshData, 1000);
 
+  // OpenSea Status Polling
+  function refreshOpenSeaStatus() {
+    chrome.storage.local.get(['settings'], async (res) => {
+      const s = res.settings || {};
+      if (!s.workerUrl || !s.clientKey) return;
+      try {
+        const url = `${s.workerUrl.replace(/\/$/, '')}/opensea/status?key=${encodeURIComponent(s.clientKey)}`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        const dot = document.getElementById('os-status-dot');
+        const txt = document.getElementById('os-status-text');
+        
+        if (data.ok) {
+           dot.style.backgroundColor = '#4caf50';
+           const timeStr = data.last_scan_at ? new Date(data.last_scan_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '';
+           txt.innerText = 'OK ' + timeStr;
+           txt.style.color = '#333';
+        } else {
+           dot.style.backgroundColor = '#f44336';
+           let errReason = data.reason || data.status || 'error';
+           if (errReason === '429') errReason = 'LIMIT';
+           txt.innerText = 'PROBLEM (' + errReason + ')';
+           txt.style.color = '#f44336';
+        }
+      } catch (e) {
+        const dot = document.getElementById('os-status-dot');
+        const txt = document.getElementById('os-status-text');
+        if (dot) dot.style.backgroundColor = '#f44336';
+        if (txt) txt.innerText = 'OFFLINE';
+      }
+    });
+  }
+
+  refreshOpenSeaStatus();
+  setInterval(refreshOpenSeaStatus, 30000);
+
   btnStart.addEventListener('click', () => {
     chrome.runtime.sendMessage({ type: 'START_SCANNER' });
     refreshData();

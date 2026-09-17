@@ -352,6 +352,89 @@ async function ensureOpenSeaAuthTable(db) {
   `).run();
 }
 
+export async function ensureOpenSeaStatusTable(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS opensea_scan_status (
+      id TEXT PRIMARY KEY,
+      ok INTEGER DEFAULT 0,
+      status TEXT,
+      reason TEXT,
+      error TEXT,
+      drops_count INTEGER DEFAULT 0,
+      sendable_count INTEGER DEFAULT 0,
+      sent_count INTEGER DEFAULT 0,
+      last_scan_at TEXT NOT NULL
+    )
+  `).run();
+}
+
+export async function recordOpenSeaScanStatus(db, result, sentCount = 0) {
+  await ensureOpenSeaStatusTable(db);
+  const ok = result?.ok ? 1 : 0;
+  const status = result?.ok ? 'ok' : (result?.skipped ? 'skipped' : 'error');
+
+  await db.prepare(`
+    INSERT OR REPLACE INTO opensea_scan_status (
+      id, ok, status, reason, error, drops_count, sendable_count, sent_count, last_scan_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    'latest',
+    ok,
+    status,
+    result?.reason || null,
+    result?.error || null,
+    result?.count || 0,
+    result?.sendable_count || 0,
+    sentCount || result?.sent_count || 0,
+    new Date().toISOString()
+  ).run();
+}
+
+export async function getOpenSeaScanStatus(db) {
+  await ensureOpenSeaStatusTable(db);
+  await ensureOpenSeaDropsTable(db);
+  await ensureOpenSeaAuthTable(db);
+
+  const status = await db.prepare('SELECT * FROM opensea_scan_status WHERE id = ?')
+    .bind('latest')
+    .first();
+  const key = await db.prepare('SELECT expires_at FROM opensea_api_keys WHERE id = ?')
+    .bind('instant')
+    .first();
+  const latestDrop = await db.prepare('SELECT MAX(updated_at) AS latest_drop_at, COUNT(*) AS drops_total FROM opensea_drops')
+    .first();
+
+  if (!status) {
+    return {
+      ok: false,
+      status: 'unknown',
+      reason: 'no_scan_yet',
+      error: null,
+      last_scan_at: null,
+      drops_count: 0,
+      sendable_count: 0,
+      sent_count: 0,
+      drops_total: latestDrop?.drops_total || 0,
+      latest_drop_at: latestDrop?.latest_drop_at || null,
+      key_expires_at: key?.expires_at || null
+    };
+  }
+
+  return {
+    ok: status.ok === 1,
+    status: status.status,
+    reason: status.reason,
+    error: status.error,
+    last_scan_at: status.last_scan_at,
+    drops_count: status.drops_count || 0,
+    sendable_count: status.sendable_count || 0,
+    sent_count: status.sent_count || 0,
+    drops_total: latestDrop?.drops_total || 0,
+    latest_drop_at: latestDrop?.latest_drop_at || null,
+    key_expires_at: key?.expires_at || null
+  };
+}
+
 async function getOpenSeaApiKey(env) {
   if (env.OPENSEA_API_KEY) return env.OPENSEA_API_KEY;
 
