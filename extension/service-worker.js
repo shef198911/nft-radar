@@ -11,6 +11,7 @@ const ALARM_SCROLL_WATCHDOG = 'radar-scroll-watchdog';
 const MIN_ALARM_DELAY_MS = 30000;
 const SOURCE_REFRESH_MS = 6 * 60 * 60 * 1000;
 const MAX_DYNAMIC_SOURCE_ACCOUNTS = 12;
+const DEFAULT_PAGE_REFRESH_INTERVAL = 15;
 
 let state = {
   isRunning: false,
@@ -20,7 +21,8 @@ let state = {
   nextRunAt: null,
   activeScrollGeneration: null,
   sourceAccounts: [],
-  sourcesUpdatedAt: 0
+  sourcesUpdatedAt: 0,
+  lastPageReloadAt: 0
 };
 
 let settings = {
@@ -28,6 +30,7 @@ let settings = {
   clientKey: (typeof CONFIG !== 'undefined' ? CONFIG.clientKey : ''),
   scanInterval: 10,
   maxScrolls: 15,
+  pageRefreshInterval: (typeof CONFIG !== 'undefined' ? (CONFIG.pageRefreshInterval ?? DEFAULT_PAGE_REFRESH_INTERVAL) : DEFAULT_PAGE_REFRESH_INTERVAL),
   moniFilterEnabled: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterEnabled : true),
   moniFilterMinScore: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterMinScore : 1000),
   moniFilterIfUnavailable: (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterIfUnavailable : 'reject'),
@@ -47,7 +50,50 @@ function sanitizeUsername(username) {
 }
 
 function buildSourceQuery(username) {
-  return `(from:${username}) (NFT OR mint OR drop OR collection OR whitelist OR allowlist OR WL OR FCFS OR GTD OR "free mint" OR "Robinhood Chain" OR "RH Chain" OR "ARC Chain" OR Solana OR SOL)`;
+  const opportunityTerms = [
+    'NFT',
+    'NFTs',
+    'mint',
+    'minting',
+    'drop',
+    'launch',
+    'collection',
+    'whitelist',
+    'allowlist',
+    '"allow list"',
+    'WL',
+    'FCFS',
+    'GTD',
+    'raffle',
+    'giveaway',
+    'claim',
+    '"free mint"',
+    '"free claim"',
+    '"public mint"'
+  ].join(' OR ');
+
+  const chainTerms = [
+    '"Robinhood Chain"',
+    '"RH Chain"',
+    '"Robinhood NFT"',
+    '"Robinhood mint"',
+    '"ARC Chain"',
+    '"Arc NFT"',
+    '"ARC mint"',
+    '"Solana NFT"',
+    '"Solana mint"',
+    '"Solana free mint"',
+    '"$SOL"'
+  ].join(' OR ');
+
+  return `from:${username} -filter:replies (${opportunityTerms} OR ${chainTerms})`;
+}
+
+function calibrateSearchQuery(query) {
+  const trimmed = String(query || '').trim();
+  if (!trimmed) return trimmed;
+  if (/\b-?filter:replies\b/i.test(trimmed)) return trimmed;
+  return `-filter:replies ${trimmed}`;
 }
 
 function rebuildTasks() {
@@ -55,8 +101,9 @@ function rebuildTasks() {
   tasksList = [];
 
   for (let q of queriesList) {
-    tasksList.push({ query: q, tab: 'top', scrollRatio: 1.0 });
-    tasksList.push({ query: q, tab: 'latest', scrollRatio: 0.35 });
+    const query = calibrateSearchQuery(q);
+    tasksList.push({ query, tab: 'top', scrollRatio: 1.0 });
+    tasksList.push({ query, tab: 'latest', scrollRatio: 0.35 });
   }
 
   const uniqueAccounts = [...new Set(dynamicSourceAccounts.map(sanitizeUsername).filter(Boolean))]
@@ -83,6 +130,18 @@ function logError(msg) {
 function toSettingNumber(value, fallback) {
   const parsed = parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function getPageRefreshIntervalMs() {
+  const minutes = toSettingNumber(settings.pageRefreshInterval, DEFAULT_PAGE_REFRESH_INTERVAL);
+  if (minutes <= 0) return 0;
+  return Math.max(1, minutes) * 60 * 1000;
+}
+
+function shouldForcePageReload() {
+  const intervalMs = getPageRefreshIntervalMs();
+  if (!intervalMs) return false;
+  return !state.lastPageReloadAt || Date.now() - state.lastPageReloadAt >= intervalMs;
 }
 
 function getQualitySettings(settingsSource = {}) {
@@ -408,11 +467,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
-function navigateTab(url, cb) {
+function navigateTab(url, cb, options = {}) {
   if (state.scannerTabId) {
     chrome.tabs.get(state.scannerTabId, (tab) => {
       if (chrome.runtime.lastError || !tab) {
          createTab(url, cb);
+      } else if (options.forceReload) {
+         state.lastPageReloadAt = Date.now();
+         saveState();
+         logInfo('Refreshing scanner tab before search');
+         chrome.tabs.update(state.scannerTabId, { url: url }, cb);
       } else {
          // Try in-page SPA navigation first to avoid full reload
          chrome.tabs.sendMessage(state.scannerTabId, { type: 'NAVIGATE_IN_PAGE', url: url }, (response) => {
@@ -471,7 +535,7 @@ function executeNextQuery(gen, resume = false) {
             }).catch(()=>null);
         }
      }, 6000); // 6 seconds wait for SPA transition
-  });
+  }, { forceReload: shouldForcePageReload() });
 }
 
 async function startScanner() {

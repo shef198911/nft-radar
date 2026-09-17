@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const clientKeyInput = document.getElementById('clientKey');
   const scanIntervalInput = document.getElementById('scanInterval');
   const maxScrollsInput = document.getElementById('maxScrolls');
+  const pageRefreshIntervalInput = document.getElementById('pageRefreshInterval');
   
   const moniFilterEnabled = document.getElementById('moniFilterEnabled');
   const moniFilterMinScore = document.getElementById('moniFilterMinScore');
@@ -19,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     clientKeyInput.value = settings.clientKey || (typeof CONFIG !== 'undefined' ? CONFIG.clientKey : '');
     scanIntervalInput.value = settings.scanInterval || 10;
     maxScrollsInput.value = settings.maxScrolls || 15;
+    pageRefreshIntervalInput.value = settings.pageRefreshInterval !== undefined ? settings.pageRefreshInterval : (typeof CONFIG !== 'undefined' ? (CONFIG.pageRefreshInterval ?? 15) : 15);
     
     moniFilterEnabled.checked = settings.moniFilterEnabled !== undefined ? settings.moniFilterEnabled : (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterEnabled : true);
     moniFilterMinScore.value = settings.moniFilterMinScore !== undefined ? settings.moniFilterMinScore : (typeof CONFIG !== 'undefined' ? CONFIG.moniFilterMinScore : 1000);
@@ -32,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
       clientKey: clientKeyInput.value.trim(),
       scanInterval: parseInt(scanIntervalInput.value, 10),
       maxScrolls: parseInt(maxScrollsInput.value, 10),
+      pageRefreshInterval: parseInt(pageRefreshIntervalInput.value, 10) || 0,
       moniFilterEnabled: moniFilterEnabled.checked,
       moniFilterMinScore: parseInt(moniFilterMinScore.value, 10) || 0,
       minFollowers: parseInt(minFollowers.value, 10) || 0,
