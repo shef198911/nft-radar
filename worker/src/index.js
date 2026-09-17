@@ -47,18 +47,25 @@ function validateTweetUrl(value) {
   }
 }
 
-function getTelegramTargets(env) {
+function getTelegramTargets(env, isXList = false) {
   const targetsConfig = env.TELEGRAM_TARGETS_PRIVATE || env.TELEGRAM_TARGETS;
   if (targetsConfig) {
     try {
       const targets = JSON.parse(targetsConfig);
       if (Array.isArray(targets)) {
         return targets
-          .map((target) => ({
-            name: target.name || target.chat_id || target.chatId || 'telegram',
-            chatId: target.chat_id || target.chatId,
-            threadId: target.thread_id || target.threadId || null
-          }))
+          .map((target) => {
+            const chatId = target.chat_id || target.chatId;
+            let threadId = target.thread_id || target.threadId || null;
+            if (threadId && isXList) {
+              threadId = 346298; // Special topic for X List
+            }
+            return {
+              name: target.name || target.chat_id || target.chatId || 'telegram',
+              chatId,
+              threadId
+            };
+          })
           .filter((target) => target.chatId);
       }
     } catch (e) {
@@ -67,18 +74,20 @@ function getTelegramTargets(env) {
   }
 
   if (env.TELEGRAM_CHAT_ID) {
+    let threadId = env.TELEGRAM_THREAD_ID || null;
+    if (threadId && isXList) threadId = 346298;
     return [{
       name: 'legacy',
       chatId: env.TELEGRAM_CHAT_ID,
-      threadId: env.TELEGRAM_THREAD_ID || null
+      threadId
     }];
   }
 
   return [];
 }
 
-async function sendTelegramBroadcast(env, message, replyMarkup) {
-  const targets = getTelegramTargets(env);
+async function sendTelegramBroadcast(env, message, replyMarkup, isXList = false) {
+  const targets = getTelegramTargets(env, isXList);
   if (!env.TELEGRAM_BOT_TOKEN || targets.length === 0) {
     console.warn('Missing Telegram token or targets');
     return { ok: false, results: [] };
@@ -438,7 +447,7 @@ router.post('/ingest', async (request, env) => {
               const replyMarkup = {
                 inline_keyboard: [[{ text: 'Open Tweet', url: payload.tweet_url }]]
               };
-              const tgRes = await sendTelegramBroadcast(env, msg, replyMarkup);
+              const tgRes = await sendTelegramBroadcast(env, msg, replyMarkup, !!payload.is_x_list);
               if (tgRes.ok) await markSent(env.DB, payload.tweet_id, formatTelegramMessageIds(tgRes.results));
            }
         }
@@ -474,7 +483,7 @@ router.post('/ingest', async (request, env) => {
       const replyMarkup = {
         inline_keyboard: [[{ text: 'Open Tweet', url: scored.tweet_url }]]
       };
-      const tgRes = await sendTelegramBroadcast(env, message, replyMarkup);
+      const tgRes = await sendTelegramBroadcast(env, message, replyMarkup, !!payload.is_x_list);
       if (tgRes.ok) {
         await markSent(env.DB, scored.tweet_id, formatTelegramMessageIds(tgRes.results));
       }
