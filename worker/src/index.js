@@ -13,6 +13,11 @@ import {
   getDailySummaryRecord,
   recordDailySummarySent
 } from './daily-summary.js';
+import {
+  formatOpenSeaDropMessage,
+  markOpenSeaDropSent,
+  scanOpenSeaDrops
+} from './opensea.js';
 
 const router = Router();
 
@@ -177,6 +182,27 @@ async function sendDailySummary(env, now = new Date(), options = {}) {
   return { ok: tgRes.ok, telegram: tgRes, summary };
 }
 
+async function runOpenSeaScan(env, options = {}) {
+  const result = await scanOpenSeaDrops(env, options);
+  if (!result.ok || options.dryRun) return result;
+
+  const sent = [];
+  for (const drop of result.sendable || []) {
+    const message = formatOpenSeaDropMessage(drop);
+    const replyMarkup = {
+      inline_keyboard: [[{ text: 'Open OpenSea Drop', url: drop.opensea_url }]]
+    };
+    const tgRes = await sendTelegramBroadcast(env, message, replyMarkup);
+    if (tgRes.ok) {
+      const messageIds = formatTelegramMessageIds(tgRes.results);
+      await markOpenSeaDropSent(env.DB, drop.slug, messageIds);
+      sent.push({ slug: drop.slug, telegram_message_id: messageIds });
+    }
+  }
+
+  return { ...result, sent_count: sent.length, sent };
+}
+
 router.get('/health', async (request, env) => {
   let dbStatus = 'ok';
   try {
@@ -235,6 +261,24 @@ router.get('/daily-summary', async (request, env) => {
     });
   } catch (e) {
     return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+  }
+});
+
+router.get('/opensea/scan', async (request, env) => {
+  if (!isAuthorized(request, env)) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const url = new URL(request.url);
+  const dryRun = url.searchParams.get('dry') !== '0';
+
+  try {
+    const result = await runOpenSeaScan(env, { dryRun });
+    return new Response(JSON.stringify(result), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 500 });
   }
 });
 
@@ -419,6 +463,13 @@ export default {
 
   async scheduled(controller, env, ctx) {
     const scheduledAt = controller?.scheduledTime ? new Date(controller.scheduledTime) : new Date();
-    ctx.waitUntil(sendDailySummary(env, scheduledAt));
+    if (controller?.cron === '0 18 * * *') {
+      ctx.waitUntil(Promise.all([
+        runOpenSeaScan(env),
+        sendDailySummary(env, scheduledAt)
+      ]));
+    } else {
+      ctx.waitUntil(runOpenSeaScan(env));
+    }
   }
 };

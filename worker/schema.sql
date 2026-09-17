@@ -64,3 +64,40 @@ CREATE TABLE IF NOT EXISTS daily_summaries (
   sent_at TEXT NOT NULL,
   telegram_message_id TEXT
 );
+
+CREATE TABLE IF NOT EXISTS opensea_drops (
+  slug TEXT PRIMARY KEY,
+  name TEXT,
+  opensea_url TEXT,
+  chain TEXT,
+  source_type TEXT,
+  status TEXT,
+  category TEXT,
+  score INTEGER DEFAULT 0,
+  price TEXT,
+  phase_summary TEXT,
+  whitelist_url TEXT,
+  public_url TEXT,
+  starts_at TEXT,
+  ends_at TEXT,
+  total_supply INTEGER,
+  max_supply INTEGER,
+  minted_count INTEGER,
+  image_url TEXT,
+  raw_json TEXT,
+  sent_to_telegram INTEGER DEFAULT 0,
+  telegram_message_id TEXT,
+  detected_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_opensea_drops_score ON opensea_drops(score);
+CREATE INDEX IF NOT EXISTS idx_opensea_drops_detected ON opensea_drops(detected_at);
+CREATE INDEX IF NOT EXISTS idx_opensea_drops_sent ON opensea_drops(sent_to_telegram);
+
+CREATE TABLE IF NOT EXISTS opensea_api_keys (
+  id TEXT PRIMARY KEY,
+  api_key TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);

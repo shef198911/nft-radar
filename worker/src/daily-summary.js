@@ -1,3 +1,5 @@
+import { queryOpenSeaSummary } from './opensea.js';
+
 const MSK_OFFSET_MS = 3 * 60 * 60 * 1000;
 
 function escapeHTML(str) {
@@ -69,7 +71,7 @@ async function queryTop(db, whereClause, startIso, endIso, limit = 10) {
 export async function buildDailySummary(db, now = new Date()) {
   const range = getMskDayRange(now);
 
-  const [free, whitelist, paid] = await Promise.all([
+  const [free, whitelist, paid, opensea] = await Promise.all([
     queryTop(db, 'COALESCE(is_free, 0) = 1', range.startIso, range.endIso),
     queryTop(db, `(COALESCE(is_free, 0) = 0 AND (
       COALESCE(is_free_whitelist, 0) = 1
@@ -83,13 +85,20 @@ export async function buildDailySummary(db, now = new Date()) {
       AND (
         paid_price IS NOT NULL
         OR (price IS NOT NULL AND upper(price) != 'FREE')
-      ))`, range.startIso, range.endIso)
+      ))`, range.startIso, range.endIso),
+    queryOpenSeaSummary(db, range.startIso, range.endIso)
   ]);
+
+  const twitterTotal = free.length + whitelist.length + paid.length;
+  const openseaTotal = opensea.free.length + opensea.whitelist.length + opensea.paid.length;
 
   return {
     ...range,
     categories: { free, whitelist, paid },
-    totalItems: free.length + whitelist.length + paid.length
+    opensea,
+    twitterTotal,
+    openseaTotal,
+    totalItems: twitterTotal + openseaTotal
   };
 }
 
@@ -116,17 +125,50 @@ function formatCategory(title, items) {
   return `${title}\n${lines.join('\n')}\n`;
 }
 
+function openseaItemLabel(item) {
+  const name = trimText(item.name || item.slug || 'OpenSea Drop', 42);
+  const parts = [
+    `<a href="${escapeHTML(item.opensea_url)}">${escapeHTML(name)}</a>`,
+    `⭐ ${item.score}/100`
+  ];
+
+  if (item.chain && item.chain !== 'Unknown') parts.push(escapeHTML(item.chain));
+  if (item.status) parts.push(escapeHTML(item.status));
+  if (item.price && item.price !== 'FREE') parts.push(escapeHTML(trimText(item.price, 34)));
+  if (item.starts_at) parts.push(escapeHTML(item.starts_at.replace('T', ' ').slice(0, 16) + ' UTC'));
+  if (item.whitelist_url) parts.push(`<a href="${escapeHTML(item.whitelist_url)}">WL</a>`);
+  if (item.public_url) parts.push(`<a href="${escapeHTML(item.public_url)}">Public</a>`);
+
+  return parts.join(' | ');
+}
+
+function formatOpenSeaCategory(title, items) {
+  if (!items.length) return `${title}\nНет за сегодня\n`;
+
+  const lines = items.map((item, index) => `${index + 1}. ${openseaItemLabel(item)}`);
+  return `${title}\n${lines.join('\n')}\n`;
+}
+
 export function formatDailySummaryMessage(summary) {
-  const { summaryDate, categories } = summary;
+  const { summaryDate, categories, opensea } = summary;
 
   let msg = `<b>NFT Radar Daily Summary</b>\n`;
   msg += `<b>${escapeHTML(summaryDate)} MSK</b>\n`;
   msg += `Топ по Radar Score, только отправленные алерты.\n\n`;
+  msg += `<b>Twitter / X</b>\n`;
   msg += formatCategory('🟢 <b>FREE</b>', categories.free);
   msg += '\n';
   msg += formatCategory('🎯 <b>WHITELIST</b>', categories.whitelist);
   msg += '\n';
   msg += formatCategory('💰 <b>PAID</b>', categories.paid);
+
+  msg += '\n\n';
+  msg += `<b>OpenSea Drops</b>\n`;
+  msg += formatOpenSeaCategory('🌊🟢 <b>FREE</b>', opensea.free);
+  msg += '\n';
+  msg += formatOpenSeaCategory('🌊🎯 <b>WHITELIST / GTD</b>', opensea.whitelist);
+  msg += '\n';
+  msg += formatOpenSeaCategory('🌊💰 <b>PAID</b>', opensea.paid);
 
   return msg.trim();
 }
