@@ -1,8 +1,10 @@
-export async function getProjectAlertStatus(db, projectKey, tweetId, username, hours = 48, maxAuthors = 3) {
+export async function getProjectAlertStatus(db, projectKey, tweetId, username, hours = 48, maxAuthors = 3, isXList = false, opportunityType = null) {
   if (!projectKey) return null;
 
   const safeHours = Number.isFinite(Number(hours)) ? Math.max(1, Math.min(168, Number(hours))) : 48;
   const authorKey = String(username || '').trim().toLowerCase() || '__unknown__';
+  
+  const eventFilter = isXList && opportunityType ? ` AND opportunity_type = '${opportunityType}'` : '';
 
   const sameAuthor = await db.prepare(`
       SELECT tweet_id, tweet_url, username, display_name, score, detected_at
@@ -12,6 +14,7 @@ export async function getProjectAlertStatus(db, projectKey, tweetId, username, h
         AND COALESCE(NULLIF(lower(username), ''), '__unknown__') = ?
         AND sent_to_telegram = 1
         AND datetime(detected_at) >= datetime('now', ?)
+        ${eventFilter}
       ORDER BY score DESC, detected_at DESC
       LIMIT 1
     `).bind(projectKey, tweetId, authorKey, `-${safeHours} hours`).first()
@@ -28,6 +31,7 @@ export async function getProjectAlertStatus(db, projectKey, tweetId, username, h
       AND tweet_id != ?
       AND sent_to_telegram = 1
       AND datetime(detected_at) >= datetime('now', ?)
+      ${eventFilter}
     GROUP BY COALESCE(NULLIF(lower(username), ''), '__unknown__')
     ORDER BY latest_detected DESC
   `).bind(projectKey, tweetId, `-${safeHours} hours`).first();
@@ -41,6 +45,7 @@ export async function getProjectAlertStatus(db, projectKey, tweetId, username, h
         AND tweet_id != ?
         AND sent_to_telegram = 1
         AND datetime(detected_at) >= datetime('now', ?)
+        ${eventFilter}
       GROUP BY COALESCE(NULLIF(lower(username), ''), '__unknown__')
     )
   `).bind(projectKey, tweetId, `-${safeHours} hours`).first() : { count: 0 };

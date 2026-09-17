@@ -20,6 +20,7 @@ import {
   recordOpenSeaScanStatus,
   getOpenSeaScanStatus
 } from './opensea.js';
+import { runAIFilter } from './ai-classifier.js';
 
 const router = Router();
 
@@ -130,10 +131,14 @@ function getProjectMaxAuthors(env) {
 }
 
 async function shouldSendTelegram(db, env, scored) {
-  const minScore = parseInt(env.MIN_TELEGRAM_SCORE || '50', 10);
-  if (scored.score < minScore) return { ok: false, reason: 'score' };
-  if (!passesQualityGate(scored)) return { ok: false, reason: 'quality' };
-  if (!canSendOpportunity(scored)) return { ok: false, reason: 'not_actionable' };
+  if (scored.is_x_list) {
+    if (scored.score < 5) return { ok: false, reason: 'ai_score_too_low' };
+  } else {
+    const minScore = parseInt(env.MIN_TELEGRAM_SCORE || '50', 10);
+    if (scored.score < minScore) return { ok: false, reason: 'score' };
+    if (!passesQualityGate(scored)) return { ok: false, reason: 'quality' };
+    if (!canSendOpportunity(scored)) return { ok: false, reason: 'not_actionable' };
+  }
 
   const projectAlertStatus = await getProjectAlertStatus(
     db,
@@ -141,7 +146,9 @@ async function shouldSendTelegram(db, env, scored) {
     scored.tweet_id,
     scored.username,
     getProjectDedupeHours(env),
-    getProjectMaxAuthors(env)
+    getProjectMaxAuthors(env),
+    scored.is_x_list,
+    scored.opportunity_type ? String(scored.opportunity_type).replace(/'/g, "''") : null
   );
 
   if (!projectAlertStatus?.ok) {
@@ -413,7 +420,17 @@ router.post('/ingest', async (request, env) => {
   const existing = await checkDuplicate(env.DB, payload.tweet_id);
   if (existing) {
     if (existing.sent_to_telegram === 0) {
-       const scored = calculateScore(parseTweet(payload));
+       let scored = calculateScore(parseTweet(payload));
+       
+       if (payload.is_x_list) {
+         const aiResult = await runAIFilter(payload.text, env);
+         if (!aiResult || !aiResult.relevant || !aiResult.new_information || aiResult.promotional || aiResult.engagement_bait || aiResult.score < 5) {
+           return new Response(JSON.stringify({ status: 'retry_attempted', send_decision: 'ai_rejected' }), { headers: { 'Content-Type': 'application/json' } });
+         }
+         scored.score = aiResult.score;
+         scored.opportunity_type = aiResult.category;
+       }
+
        const sendDecision = await shouldSendTelegram(env.DB, env, scored);
        if (sendDecision.ok) {
            const msg = formatTelegramMessage(scored);
@@ -431,7 +448,22 @@ router.post('/ingest', async (request, env) => {
   }
 
   const parsed = parseTweet(payload);
-  const scored = calculateScore(parsed);
+  let scored = calculateScore(parsed);
+
+  if (payload.is_x_list) {
+    const aiResult = await runAIFilter(payload.text, env);
+    if (!aiResult || !aiResult.relevant || !aiResult.new_information || aiResult.promotional || aiResult.engagement_bait || aiResult.score < 5) {
+      await saveTweet(env.DB, scored);
+      return new Response(JSON.stringify({
+        status: 'ok',
+        score: scored.score,
+        project_key: scored.project_key,
+        send_decision: 'ai_rejected'
+      }), { headers: { 'Content-Type': 'application/json' } });
+    }
+    scored.score = aiResult.score;
+    scored.opportunity_type = aiResult.category;
+  }
 
   await saveTweet(env.DB, scored);
 

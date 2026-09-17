@@ -54,4 +54,36 @@ function passesLocalFilter(text) {
   
   return isOpportunity;
 }
-if (typeof window !== 'undefined') window.passesLocalFilter = passesLocalFilter;
+
+function passesXListLocalFilter(text) {
+  if (!text) return false;
+  const lowerText = text.toLowerCase();
+  
+  if (text.trim().length < 10) return false;
+
+  const garbageExact = ['gm', 'gn', 'lfg', 'bullish', 'bearish'];
+  if (garbageExact.includes(lowerText.trim())) return false;
+
+  const obviousGarbage = [
+    /\bgm ct\b/i,
+    /\bgood morning\b/i,
+    /\bgood night\b/i,
+    /\bwhat do you think\b/i,
+    /\bwho is bullish\b/i,
+    /\bwe are so back\b/i,
+    /\buse my link\b/i,
+    /\buse my code\b/i,
+    /\bsign up with my link\b/i,
+    /\bdeposit now\b/i,
+    /\btrade now\b/i,
+    /\bbuy now\b/i
+  ];
+  if (obviousGarbage.some(p => p.test(lowerText))) return false;
+
+  return true;
+}
+
+if (typeof window !== 'undefined') {
+  window.passesLocalFilter = passesLocalFilter;
+  window.passesXListLocalFilter = passesXListLocalFilter;
+}

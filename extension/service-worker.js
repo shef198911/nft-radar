@@ -113,6 +113,14 @@ function rebuildTasks() {
     tasksList.push({ query: buildSourceQuery(username), tab: 'latest', scrollRatio: 0.6 });
   }
 
+  // Insert X List at the beginning
+  tasksList.unshift({
+    query: 'list:2100655965091606668',
+    isXList: true,
+    tab: 'latest',
+    scrollRatio: 1.0
+  });
+
   if (state.currentQueryIndex >= tasksList.length) {
     state.currentQueryIndex = 0;
   }
@@ -350,7 +358,7 @@ async function processQueue() {
   }
 
   const tweet = item.payload;
-  if (!passesQualityGate(tweet, settings)) {
+  if (!tweet.is_x_list && !passesQualityGate(tweet, settings)) {
     logInfo(`Dropping queued tweet ${tweet.tweet_id}: Moni ${tweet.moni_score ?? 'n/a'}, Followers ${tweet.follower_count ?? 'n/a'} below current filters`);
     removeQueueItem(item);
     await saveState();
@@ -513,9 +521,14 @@ function executeNextQuery(gen, resume = false) {
   logInfo(`Task ${state.currentQueryIndex + 1}/${tasksList.length} (${task.tab.toUpperCase()}): ${task.query}`);
   
   const encodedQuery = encodeURIComponent(task.query);
-  const searchUrl = task.tab === 'latest' 
-    ? `https://x.com/search?q=${encodedQuery}&src=typed_query&f=live`
-    : `https://x.com/search?q=${encodedQuery}&src=typed_query`;
+  let searchUrl;
+  if (task.isXList) {
+    searchUrl = `https://x.com/i/lists/2100655965091606668`;
+  } else {
+    searchUrl = task.tab === 'latest' 
+      ? `https://x.com/search?q=${encodedQuery}&src=typed_query&f=live`
+      : `https://x.com/search?q=${encodedQuery}&src=typed_query`;
+  }
   
   if (state.scannerTabId) {
      chrome.tabs.sendMessage(state.scannerTabId, { type: 'STOP_OBSERVER' }).catch(()=>null);

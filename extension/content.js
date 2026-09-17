@@ -150,7 +150,15 @@ function processArticles(articles, isInitial = false) {
     }
     
     // IMPORTANT: Check Local Filter FIRST!
-    if (!window.passesLocalFilter(data.text)) {
+    let passLocal = false;
+    if (window.location.pathname.includes('/lists/2100655965091606668')) {
+        passLocal = window.passesXListLocalFilter(data.text);
+        data.is_x_list = true;
+    } else {
+        passLocal = window.passesLocalFilter(data.text);
+    }
+    
+    if (!passLocal) {
        updateStats('rejected');
        return;
     }
@@ -172,7 +180,7 @@ function processArticles(articles, isInitial = false) {
                const qualitySettings = getQualitySettings(s);
                data.quality_filter = qualitySettings;
 
-               if (!passesQualityGate(data, qualitySettings)) {
+               if (!data.is_x_list && !passesQualityGate(data, qualitySettings)) {
                    updateStats('rejected');
                    console.log(`[RADAR] Quality rejected: ${data.tweet_id}, Moni: ${moni_score}, Followers: ${followerCount}`);
                    resolve();
