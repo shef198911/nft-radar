@@ -271,7 +271,7 @@ function isTargetChain(drop) {
 
 function hasBlockedText(drop) {
   const haystack = `${drop.name || ''} ${drop.description || ''}`.toLowerCase();
-  return /\b(test|testing|demo|mint bot|free mint bot|holder gated|holders only)\b/i.test(haystack);
+  return /\b(test|testing|demo|mint bot|free mint bot|holder gated|holders only|casino|gamble|gambling|betting|poker|slots|roulette|blackjack|lottery|jackpot|казино|ставки|рулетка)\b/i.test(haystack);
 }
 
 function summarizePhases(phases) {

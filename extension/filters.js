@@ -6,6 +6,11 @@ function passesLocalFilter(text) {
   if (lowerText.includes('send eth') || lowerText.includes('send crypto') || lowerText.includes('drainer') || lowerText.includes('phishing')) {
      return false;
   }
+  
+  // Gambling/Casino reject
+  if (/\b(casino|gamble|gambling|betting|poker|slots|roulette|blackjack|lottery|jackpot|казино|ставки|рулетка)\b/i.test(lowerText)) {
+     return false;
+  }
 
   const utilityOrHolderGatePatterns = [
     /\bfree\s+mint\s+bot\b/i,
