@@ -116,16 +116,36 @@ function normalizeDate(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function formatWei(str) {
+  try {
+    const num = BigInt(str);
+    if (num === 0n) return '0';
+    const ether = Number(num) / 1e18;
+    return ether.toString();
+  } catch (e) {
+    return str;
+  }
+}
+
 function formatPrice(value) {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value === 'object') {
-    const amount = pick(value.amount, value.value, value.quantity, value.decimal, value.native);
+    let amount = pick(value.amount, value.value, value.quantity, value.decimal, value.native);
     const currency = pick(value.currency, value.symbol, value.token?.symbol);
-    if (amount !== null && amount !== undefined && currency) return `${amount} ${currency}`.toUpperCase();
-    if (amount !== null && amount !== undefined) return String(amount);
+    if (amount !== null && amount !== undefined) {
+      amount = String(amount);
+      if (amount.length > 8 && /^\d+$/.test(amount)) {
+        amount = formatWei(amount);
+      }
+      if (currency) return `${amount} ${currency}`.toUpperCase();
+      return amount;
+    }
     return null;
   }
-  const text = String(value).replace(/\s+/g, ' ').trim();
+  let text = String(value).replace(/\s+/g, ' ').trim();
+  if (text.length > 8 && /^\d+$/.test(text)) {
+    text = formatWei(text);
+  }
   return text ? text.toUpperCase() : null;
 }
 
@@ -261,8 +281,8 @@ function summarizePhases(phases) {
     if (phase.price) bits.push(phase.price);
     if (phase.max_per_wallet) bits.push(`max ${phase.max_per_wallet}/wallet`);
     if (phase.start_at) bits.push(new Date(phase.start_at).toISOString().replace('T', ' ').slice(0, 16) + ' UTC');
-    return bits.join(' · ');
-  }).join(' | ');
+    return '- ' + bits.join(' · ');
+  }).join('\n');
 }
 
 function firstPhaseLink(phases, matcher) {
@@ -674,6 +694,12 @@ export async function scanOpenSeaDrops(env, options = {}) {
     if (drop.score < minScore) return false;
     if (targetOnly && !drop.is_target_chain) return false;
     if (drop.is_blocked_text) return false;
+    
+    // Ignore ended/sold out drops
+    if (drop.max_supply > 0 && drop.total_supply >= drop.max_supply) return false;
+    if (drop.ends_at && new Date(drop.ends_at).getTime() < Date.now()) return false;
+    if (drop.status === 'past') return false;
+
     return ['free', 'whitelist', 'paid'].includes(drop.category);
   }).sort((a, b) => b.score - a.score).slice(0, parseIntSetting(env.OPENSEA_MAX_ALERTS_PER_SCAN, 5, 20));
 
@@ -697,7 +723,7 @@ export function formatOpenSeaDropMessage(drop) {
   if (drop.price) msg += `💰 <b>Price:</b> ${escapeHTML(drop.price)}\n`;
   if (drop.starts_at) msg += `📅 <b>Start:</b> ${escapeHTML(drop.starts_at.replace('T', ' ').slice(0, 16))} UTC\n`;
   if (drop.max_supply) msg += `📊 <b>Supply:</b> ${drop.total_supply || 0}/${drop.max_supply}\n`;
-  if (drop.phase_summary) msg += `🎯 <b>Mint phases:</b> ${escapeHTML(drop.phase_summary)}\n`;
+  if (drop.phase_summary) msg += `🎯 <b>Mint phases:</b>\n${escapeHTML(drop.phase_summary)}\n`;
   if (drop.whitelist_url) msg += `🔗 <b>Whitelist:</b> <a href="${escapeHTML(drop.whitelist_url)}">link</a>\n`;
   if (drop.public_url) msg += `🔗 <b>Public:</b> <a href="${escapeHTML(drop.public_url)}">link</a>\n`;
   msg += `⭐ <b>OpenSea Score:</b> ${drop.score}/100\n\n`;
