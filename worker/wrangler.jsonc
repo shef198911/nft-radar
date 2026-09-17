@@ -19,5 +19,8 @@
       "database_name": "nft-radar-db",
       "database_id": "a26c8371-c1ec-4257-b68e-98221c7ca192"
     }
-  ]
+  ],
+  "ai": {
+    "binding": "AI"
+  }
 }

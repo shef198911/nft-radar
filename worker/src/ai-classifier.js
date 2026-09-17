@@ -1,19 +1,4 @@
 export async function runAIFilter(tweetText, env) {
-  if (!env.GEMINI_API_KEY) {
-    console.warn("GEMINI_API_KEY is missing. Skipping AI classification and allowing by default for testing.");
-    // Fallback if no key is configured: allow with default score.
-    return {
-      relevant: true,
-      category: "other",
-      actionable: true,
-      new_information: true,
-      promotional: false,
-      engagement_bait: false,
-      score: 5,
-      reason: "No API key configured. Bypassed."
-    };
-  }
-
   const prompt = `You are an AI classifier for a Crypto/NFT Twitter Radar.
 Your task is to analyze the following tweet and return a JSON object evaluating its content based on strict rules.
 
@@ -63,32 +48,107 @@ ${tweetText}
 """
 `;
 
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.0
-        }
-      })
-    });
+  let useCloudflare = false;
+  let geminiResult = null;
 
-    if (!res.ok) {
-      console.error("Gemini API error", await res.text());
+  if (!env.GEMINI_API_KEY) {
+    console.warn("[AI] GEMINI_API_KEY is missing. Trying Cloudflare AI");
+    useCloudflare = true;
+  } else {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json", temperature: 0.0 }
+        })
+      });
+
+      if (!res.ok) {
+        if (res.status === 429) {
+          console.warn("[AI] Gemini HTTP 429, trying Cloudflare AI");
+        } else {
+          console.warn(`[AI] Gemini failed (${res.status}), trying Cloudflare AI`);
+        }
+        useCloudflare = true;
+      } else {
+        const data = await res.json();
+        const text = data.candidates[0].content.parts[0].text;
+        geminiResult = JSON.parse(text);
+
+        // Basic validation
+        if (typeof geminiResult !== 'object' || 
+            typeof geminiResult.relevant !== 'boolean' ||
+            typeof geminiResult.new_information !== 'boolean' ||
+            typeof geminiResult.actionable !== 'boolean' ||
+            typeof geminiResult.promotional !== 'boolean' ||
+            typeof geminiResult.engagement_bait !== 'boolean' ||
+            typeof geminiResult.score !== 'number' ||
+            typeof geminiResult.category !== 'string' ||
+            typeof geminiResult.reason !== 'string') {
+          console.warn("[AI] Gemini invalid JSON, trying Cloudflare AI");
+          useCloudflare = true;
+          geminiResult = null;
+        } else {
+          console.log("[AI] Gemini classification success");
+          return geminiResult;
+        }
+      }
+    } catch (error) {
+      console.error("[AI] Error calling Gemini classifier", error);
+      console.warn("[AI] Gemini failed, trying Cloudflare AI");
+      useCloudflare = true;
+    }
+  }
+
+  if (useCloudflare) {
+    try {
+      if (!env.AI) {
+        console.error("[AI] Cloudflare AI binding (env.AI) is missing.");
+        console.error("[AI] Gemini + Cloudflare failed, rejecting tweet");
+        return null;
+      }
+
+      // Check if glm is available or use llama
+      const res = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        messages: [
+          { role: 'system', content: prompt }
+        ]
+      });
+
+      const text = res.response;
+      let jsonStr = text;
+      const match = text.match(/```(?:json)?\n([\s\S]*?)\n```/);
+      if (match) {
+        jsonStr = match[1];
+      }
+
+      const cfResult = JSON.parse(jsonStr);
+      
+      if (typeof cfResult !== 'object' || 
+          typeof cfResult.relevant !== 'boolean' ||
+          typeof cfResult.new_information !== 'boolean' ||
+          typeof cfResult.actionable !== 'boolean' ||
+          typeof cfResult.promotional !== 'boolean' ||
+          typeof cfResult.engagement_bait !== 'boolean' ||
+          typeof cfResult.score !== 'number' ||
+          typeof cfResult.category !== 'string' ||
+          typeof cfResult.reason !== 'string') {
+        console.warn("[AI] Cloudflare malformed JSON");
+        console.error("[AI] Gemini + Cloudflare failed, rejecting tweet");
+        return null;
+      }
+
+      console.log("[AI] Cloudflare classification success");
+      return cfResult;
+
+    } catch (error) {
+      console.error("[AI] Error calling Cloudflare AI classifier", error);
+      console.error("[AI] Gemini + Cloudflare failed, rejecting tweet");
       return null;
     }
-
-    const data = await res.json();
-    const text = data.candidates[0].content.parts[0].text;
-    const result = JSON.parse(text);
-    return result;
-  } catch (error) {
-    console.error("Error calling AI classifier", error);
-    return null;
   }
+
+  return null;
 }

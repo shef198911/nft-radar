@@ -151,7 +151,8 @@ function processArticles(articles, isInitial = false) {
     
     // IMPORTANT: Check Local Filter FIRST!
     let passLocal = false;
-    if (window.location.pathname.includes('/lists/2100655965091606668')) {
+    const X_LIST_ID = '2100655965091606668';
+    if (window.location.pathname.includes(`/i/lists/${X_LIST_ID}`) || window.location.pathname.includes(`/lists/${X_LIST_ID}`)) {
         passLocal = window.passesXListLocalFilter(data.text);
         data.is_x_list = true;
     } else {
