@@ -30,10 +30,17 @@ export function formatTelegramMessage(data) {
   else if (data.priority === 'NORMAL') emoji = '⚪';
   
   let header = `<b>${emoji} NFT OPPORTUNITY</b>`;
-  if (data.is_robinhood) {
-    header += ` | <b>🦊 ROBINHOOD CHAIN</b>`;
-  } else if (data.chain && data.chain !== 'Unknown') {
-    header += ` | <b>⛓️ ${escapeHTML(data.chain.toUpperCase())}</b>`;
+  if (data.chain && data.chain !== 'Unknown') {
+    let chainEmoji = '⛓️';
+    if (data.chain === 'Robinhood Chain') chainEmoji = '🦊';
+    else if (data.chain === 'Solana') chainEmoji = '🟣';
+    else if (data.chain === 'Ethereum') chainEmoji = '🔷';
+    else if (data.chain === 'Base') chainEmoji = '🔵';
+    else if (data.chain === 'Arbitrum') chainEmoji = '💙';
+    else if (data.chain === 'Polygon') chainEmoji = '💜';
+    else if (data.chain === 'BNB Chain') chainEmoji = '🟡';
+    else if (data.chain === 'Avalanche') chainEmoji = '🔺';
+    header += ` | <b>${chainEmoji} ${escapeHTML(data.chain.toUpperCase())}</b>`;
   }
   
   let msg = `${header}\n\n`;

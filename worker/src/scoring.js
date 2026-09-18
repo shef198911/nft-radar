@@ -6,7 +6,7 @@ export function calculateScore(parsed) {
   if (parsed.is_free_whitelist) score += 10;
   if (parsed.is_fcfs) score += 10;
   if (parsed.is_gtd) score += 10;
-  if (parsed.is_robinhood) score += 25;
+  if (parsed.chain && parsed.chain !== 'Unknown') score += 15;
   
   const lower = parsed.text.toLowerCase();
   if (lower.includes('nft')) score += 5;

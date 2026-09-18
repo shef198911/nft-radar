@@ -1,12 +1,12 @@
 const SEARCH_GROUPS = [
-  '("Robinhood Chain" OR "RH Chain" OR "Robinhood NFT" OR "Robinhood mint" OR "on Robinhood") (NFT OR NFTs OR mint OR minting OR drop OR launch OR collection OR whitelist OR allowlist OR "allow list" OR WL OR FCFS OR GTD OR "free mint" OR "public mint")',
-  '("ARC Chain" OR "Arc NFT" OR "ARC NFT" OR "ARC mint" OR "on ARC") (NFT OR NFTs OR mint OR minting OR drop OR launch OR collection OR whitelist OR allowlist OR "allow list" OR WL OR FCFS OR GTD OR "free mint" OR "public mint")',
-  '("Solana NFT" OR "SOL NFT" OR "Solana mint" OR "Solana free mint" OR "$SOL NFT" OR "$SOL mint") (mint OR minting OR drop OR launch OR claim OR whitelist OR allowlist OR "allow list" OR WL OR FCFS OR GTD OR "free mint" OR "public mint")',
-  '("free mint" OR "free claim" OR "claim is live" OR "public mint") ("Robinhood Chain" OR "RH Chain" OR "ARC Chain" OR "Solana NFT" OR "Solana mint" OR "$SOL NFT") (NFT OR collection OR mint)',
-  '("WL spots" OR "whitelist spots" OR "allowlist spots" OR "allow list spots" OR "GTD WL" OR "FCFS WL") ("Robinhood Chain" OR "RH Chain" OR "ARC Chain" OR "Solana NFT" OR "Solana mint" OR "$SOL NFT")',
-  '("mint is live" OR "mint live" OR "mint soon" OR "mint today" OR "mint starts" OR "mint opens") ("Robinhood Chain" OR "RH Chain" OR "ARC Chain" OR "Solana NFT" OR "Solana mint" OR "$SOL NFT") (NFT OR collection)',
-  '("drop your wallet" OR "drop address" OR "drop your ETH" OR "drop your SOL" OR "wallet below") ("Robinhood Chain" OR "RH Chain" OR "ARC Chain" OR "Solana NFT" OR "Solana mint" OR "$SOL NFT") (WL OR whitelist OR allowlist OR "allow list" OR NFT)',
-  '(GTD OR FCFS OR raffle OR giveaway) ("Robinhood Chain" OR "RH Chain" OR "ARC Chain" OR "Solana NFT" OR "Solana mint" OR "$SOL NFT") (NFT OR mint OR WL OR whitelist OR allowlist)'
+  '("free mint" OR "free claim" OR "claim is live" OR "public mint") (NFT OR collection OR mint)',
+  '("WL spots" OR "whitelist spots" OR "allowlist spots" OR "allow list spots" OR "GTD WL" OR "FCFS WL") (NFT OR mint OR collection)',
+  '("mint is live" OR "mint live" OR "mint soon" OR "mint today" OR "mint starts" OR "mint opens") (NFT OR collection OR WL)',
+  '("drop your wallet" OR "drop address" OR "drop your ETH" OR "drop your SOL" OR "wallet below") (WL OR whitelist OR allowlist OR "allow list" OR NFT)',
+  '("WL giveaway" OR "NFT giveaway" OR "FCFS" OR "GTD") (NFT OR mint OR WL OR whitelist OR allowlist)',
+  '(Testnet OR Mainnet OR Airdrop) (points OR claim OR token OR eligibility OR "checker is live")',
+  '("Robinhood Chain" OR "RH Chain" OR "ARC Chain" OR "Monad" OR "Bera" OR "Berachain" OR "Base" OR "Solana") (NFT OR mint OR WL OR drop OR whitelist)',
+  '(Ethereum OR Arbitrum OR Optimism OR Polygon OR Zksync OR Linea OR "BNB Chain" OR Avalanche OR Aptos OR Sui) ("free mint" OR "whitelist spots" OR "mint is live")'
 ];
 
 if (typeof window !== 'undefined') window.SEARCH_GROUPS = SEARCH_GROUPS;

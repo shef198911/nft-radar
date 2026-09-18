@@ -350,14 +350,6 @@ router.get('/sources', async (request, env) => {
         AND username != ''
         AND datetime(detected_at) >= datetime('now', '-21 days')
         AND (
-          chain IN ('Solana', 'Robinhood Chain', 'ARC')
-          OR lower(text) LIKE '%solana%'
-          OR lower(text) LIKE '% sol %'
-          OR lower(text) LIKE '%robinhood%'
-          OR lower(text) LIKE '%rh chain%'
-          OR lower(text) LIKE '%arc chain%'
-        )
-        AND (
           score >= 35
           OR sent_to_telegram = 1
           OR is_free = 1
@@ -424,25 +416,21 @@ router.post('/ingest', async (request, env) => {
   }
   payload.tweet_url = safeTweetUrl;
   
+  if (payload.text && typeof payload.text === 'string') {
+    payload.text = payload.text.replace(/[\u200B-\u200D\uFEFF]/g, '');
+  }
+
   if (payload.text.length > 50000) return new Response('Text too long', { status: 400 });
   
   const existing = await checkDuplicate(env.DB, payload.tweet_id);
   if (existing) {
+    if (payload.is_x_list) {
+      return new Response(JSON.stringify({ status: 'duplicate_x_list_ignored' }), { status: 409, headers: { 'Content-Type': 'application/json' } });
+    }
+
     if (existing.sent_to_telegram === 0) {
        let scored = calculateScore(parseTweet(payload));
-       scored.is_x_list = !!payload.is_x_list;
-       
-       if (payload.is_x_list) {
-         const aiResult = await runAIFilter(payload.text, env);
-         if (!aiResult || !aiResult.relevant || !aiResult.new_information || aiResult.promotional || aiResult.engagement_bait || aiResult.score < 5) {
-           return new Response(JSON.stringify({ status: 'retry_attempted', send_decision: 'ai_rejected' }), { headers: { 'Content-Type': 'application/json' } });
-         }
-         scored.score = aiResult.score;
-         scored.opportunity_type = aiResult.category;
-         if (aiResult.translated_text) {
-           scored.translated_text = aiResult.translated_text;
-         }
-       }
+       scored.is_x_list = false; // it is not x_list if it reached here
 
        const sendDecision = await shouldSendTelegram(env.DB, env, scored);
        if (sendDecision.ok) {
