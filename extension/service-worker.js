@@ -100,26 +100,39 @@ function rebuildTasks() {
   queriesList = typeof SEARCH_GROUPS !== 'undefined' ? [...SEARCH_GROUPS] : [];
   tasksList = [];
 
-  for (let q of queriesList) {
-    const query = calibrateSearchQuery(q);
-    tasksList.push({ query, tab: 'top', scrollRatio: 1.0 });
-    tasksList.push({ query, tab: 'latest', scrollRatio: 0.35 });
-  }
-
-  const uniqueAccounts = [...new Set(dynamicSourceAccounts.map(sanitizeUsername).filter(Boolean))]
-    .slice(0, MAX_DYNAMIC_SOURCE_ACCOUNTS);
-
-  for (let username of uniqueAccounts) {
-    tasksList.push({ query: buildSourceQuery(username), tab: 'latest', scrollRatio: 0.6 });
-  }
-
-  // Insert X List at the beginning
-  tasksList.unshift({
+  const xListTask = {
     query: 'list:2100655965091606668',
     isXList: true,
     tab: 'latest',
     scrollRatio: 1.0
-  });
+  };
+
+  const uniqueAccounts = [...new Set(dynamicSourceAccounts.map(sanitizeUsername).filter(Boolean))]
+    .slice(0, MAX_DYNAMIC_SOURCE_ACCOUNTS);
+
+  let tempTasks = [];
+
+  for (let q of queriesList) {
+    const query = calibrateSearchQuery(q);
+    tempTasks.push({ query, tab: 'top', scrollRatio: 1.0 });
+    tempTasks.push({ query, tab: 'latest', scrollRatio: 0.35 });
+  }
+
+  for (let username of uniqueAccounts) {
+    tempTasks.push({ query: buildSourceQuery(username), tab: 'latest', scrollRatio: 0.6 });
+  }
+
+  // Interleave X List between every 2 tasks so it runs much more frequently
+  for (let i = 0; i < tempTasks.length; i++) {
+    if (i % 2 === 0) {
+      tasksList.push(xListTask);
+    }
+    tasksList.push(tempTasks[i]);
+  }
+  
+  if (tasksList.length === 0) {
+    tasksList.push(xListTask);
+  }
 
   if (state.currentQueryIndex >= tasksList.length) {
     state.currentQueryIndex = 0;
