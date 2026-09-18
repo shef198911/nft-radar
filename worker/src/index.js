@@ -430,6 +430,7 @@ router.post('/ingest', async (request, env) => {
   if (existing) {
     if (existing.sent_to_telegram === 0) {
        let scored = calculateScore(parseTweet(payload));
+       scored.is_x_list = !!payload.is_x_list;
        
        if (payload.is_x_list) {
          const aiResult = await runAIFilter(payload.text, env);
@@ -438,6 +439,9 @@ router.post('/ingest', async (request, env) => {
          }
          scored.score = aiResult.score;
          scored.opportunity_type = aiResult.category;
+         if (aiResult.translated_text) {
+           scored.translated_text = aiResult.translated_text;
+         }
        }
 
        const sendDecision = await shouldSendTelegram(env.DB, env, scored);
@@ -458,6 +462,7 @@ router.post('/ingest', async (request, env) => {
 
   const parsed = parseTweet(payload);
   let scored = calculateScore(parsed);
+  scored.is_x_list = !!payload.is_x_list;
 
   if (payload.is_x_list) {
     const aiResult = await runAIFilter(payload.text, env);
@@ -472,6 +477,9 @@ router.post('/ingest', async (request, env) => {
     }
     scored.score = aiResult.score;
     scored.opportunity_type = aiResult.category;
+    if (aiResult.translated_text) {
+      scored.translated_text = aiResult.translated_text;
+    }
   }
 
   await saveTweet(env.DB, scored);

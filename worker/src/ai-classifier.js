@@ -39,7 +39,8 @@ JSON Schema:
   "promotional": boolean,
   "engagement_bait": boolean,
   "score": number,
-  "reason": "short explanation"
+  "reason": "short explanation",
+  "translated_text": "Полный точный перевод оригинального твита на русский язык (сохраняй форматирование)"
 }
 
 Tweet to analyze:
@@ -77,20 +78,21 @@ ${tweetText}
         const text = data.candidates[0].content.parts[0].text;
         geminiResult = JSON.parse(text);
 
-        // Basic validation
-        if (typeof geminiResult !== 'object' || 
-            typeof geminiResult.relevant !== 'boolean' ||
-            typeof geminiResult.new_information !== 'boolean' ||
-            typeof geminiResult.actionable !== 'boolean' ||
-            typeof geminiResult.promotional !== 'boolean' ||
-            typeof geminiResult.engagement_bait !== 'boolean' ||
-            typeof geminiResult.score !== 'number' ||
-            typeof geminiResult.category !== 'string' ||
-            typeof geminiResult.reason !== 'string') {
+        if (typeof geminiResult !== 'object' || geminiResult === null) {
           console.warn("[AI] Gemini invalid JSON, trying Cloudflare AI");
           useCloudflare = true;
           geminiResult = null;
         } else {
+          geminiResult.relevant = !!geminiResult.relevant;
+          geminiResult.new_information = !!geminiResult.new_information;
+          geminiResult.actionable = !!geminiResult.actionable;
+          geminiResult.promotional = !!geminiResult.promotional;
+          geminiResult.engagement_bait = !!geminiResult.engagement_bait;
+          geminiResult.score = Number(geminiResult.score) || 0;
+          geminiResult.category = String(geminiResult.category || 'other');
+          geminiResult.reason = String(geminiResult.reason || '');
+          if (geminiResult.translated_text) geminiResult.translated_text = String(geminiResult.translated_text);
+
           console.log("[AI] Gemini classification success");
           return geminiResult;
         }
@@ -132,19 +134,21 @@ ${tweetText}
 
       const cfResult = JSON.parse(jsonStr);
       
-      if (typeof cfResult !== 'object' || 
-          typeof cfResult.relevant !== 'boolean' ||
-          typeof cfResult.new_information !== 'boolean' ||
-          typeof cfResult.actionable !== 'boolean' ||
-          typeof cfResult.promotional !== 'boolean' ||
-          typeof cfResult.engagement_bait !== 'boolean' ||
-          typeof cfResult.score !== 'number' ||
-          typeof cfResult.category !== 'string' ||
-          typeof cfResult.reason !== 'string') {
+      if (typeof cfResult !== 'object' || cfResult === null) {
         console.warn("[AI] Cloudflare malformed JSON");
         console.error("[AI] Gemini + Cloudflare failed, rejecting tweet");
         return null;
       }
+
+      cfResult.relevant = !!cfResult.relevant;
+      cfResult.new_information = !!cfResult.new_information;
+      cfResult.actionable = !!cfResult.actionable;
+      cfResult.promotional = !!cfResult.promotional;
+      cfResult.engagement_bait = !!cfResult.engagement_bait;
+      cfResult.score = Number(cfResult.score) || 0;
+      cfResult.category = String(cfResult.category || 'other');
+      cfResult.reason = String(cfResult.reason || '');
+      if (cfResult.translated_text) cfResult.translated_text = String(cfResult.translated_text);
 
       console.log("[AI] Cloudflare classification success");
       return cfResult;
