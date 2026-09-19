@@ -112,8 +112,7 @@ ${tweetText}
         return null;
       }
 
-      // Check if glm is available or use llama
-      const res = await env.AI.run('@cf/zai-org/glm-4.7-flash', {
+      const res = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
         messages: [
           { role: 'system', content: prompt }
         ]

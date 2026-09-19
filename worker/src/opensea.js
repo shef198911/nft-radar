@@ -692,7 +692,6 @@ export async function scanOpenSeaDrops(env, options = {}) {
   const sendable = saved.filter((drop) => {
     if (drop.sent_to_telegram) return false;
     if (drop.score < minScore) return false;
-    if (targetOnly && !drop.is_target_chain) return false;
     if (drop.is_blocked_text) return false;
     
     // Ignore ended/sold out drops

@@ -454,14 +454,17 @@ router.post('/ingest', async (request, env) => {
 
   if (payload.is_x_list) {
     const aiResult = await runAIFilter(payload.text, env);
-    if (!aiResult || !aiResult.relevant || !aiResult.new_information || aiResult.promotional || aiResult.engagement_bait || aiResult.score < 5) {
+    if (!aiResult || !aiResult.relevant || aiResult.engagement_bait || aiResult.score < 3) {
       await saveTweet(env.DB, scored);
       return new Response(JSON.stringify({
         status: 'ok',
         score: scored.score,
         project_key: scored.project_key,
-        send_decision: 'ai_rejected'
-      }), { headers: { 'Content-Type': 'application/json' } });
+        send_decision: 'ai_rejected',
+        ai_result: aiResult
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
     scored.score = aiResult.score;
     scored.opportunity_type = aiResult.category;
