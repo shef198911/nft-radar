@@ -454,7 +454,19 @@ router.post('/ingest', async (request, env) => {
 
   if (payload.is_x_list) {
     const aiResult = await runAIFilter(payload.text, env);
-    if (!aiResult || !aiResult.relevant || aiResult.engagement_bait || aiResult.score < 3) {
+    if (!aiResult) {
+      console.warn("[AI] AI completely failed, falling back to standard scoring");
+      const minScore = parseInt(env.MIN_TELEGRAM_SCORE || '50', 10);
+      if (scored.score < minScore) {
+        await saveTweet(env.DB, scored);
+        return new Response(JSON.stringify({
+          status: 'ok',
+          score: scored.score,
+          project_key: scored.project_key,
+          send_decision: 'score_fallback'
+        }), { headers: { 'Content-Type': 'application/json' } });
+      }
+    } else if (!aiResult.relevant || aiResult.engagement_bait || aiResult.score < 3) {
       await saveTweet(env.DB, scored);
       return new Response(JSON.stringify({
         status: 'ok',
@@ -465,10 +477,11 @@ router.post('/ingest', async (request, env) => {
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
+    } else {
+      scored.score = aiResult.score;
+      scored.opportunity_type = aiResult.category;
     }
-    scored.score = aiResult.score;
-    scored.opportunity_type = aiResult.category;
-    if (aiResult.translated_text) {
+    if (aiResult && aiResult.translated_text) {
       scored.translated_text = aiResult.translated_text;
     }
   }

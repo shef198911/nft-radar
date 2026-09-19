@@ -112,7 +112,7 @@ ${tweetText}
         return null;
       }
 
-      const res = await env.AI.run('@cf/meta/llama-3-8b-instruct', {
+      const res = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
         messages: [
           { role: 'system', content: prompt }
         ]
