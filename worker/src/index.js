@@ -86,7 +86,7 @@ function getTelegramTargets(env, isXList = false) {
   return [];
 }
 
-async function sendTelegramBroadcast(env, message, replyMarkup, isXList = false) {
+async function sendTelegramBroadcast(env, messages, replyMarkup, isXList = false) {
   const targets = getTelegramTargets(env, isXList);
   if (!env.TELEGRAM_BOT_TOKEN || targets.length === 0) {
     console.warn('Missing Telegram token or targets');
@@ -95,10 +95,14 @@ async function sendTelegramBroadcast(env, message, replyMarkup, isXList = false)
 
   const results = [];
   for (const target of targets) {
+    const isChannel = !target.threadId;
+    let messageBody = typeof messages === 'string' ? messages : (isChannel ? messages.en : messages.ru);
+    if (!messageBody) messageBody = typeof messages === 'string' ? messages : messages.ru;
+
     const result = await sendTelegramMessage(
       env.TELEGRAM_BOT_TOKEN,
       target.chatId,
-      message,
+      messageBody,
       replyMarkup,
       target.threadId
     );
@@ -432,17 +436,20 @@ router.post('/ingest', async (request, env) => {
        let scored = calculateScore(parseTweet(payload));
        scored.is_x_list = false; // it is not x_list if it reached here
 
-       const sendDecision = await shouldSendTelegram(env.DB, env, scored);
-       if (sendDecision.ok) {
-           const msg = formatTelegramMessage(scored);
-           if (msg) {
-              const replyMarkup = {
-                inline_keyboard: [[{ text: 'Open Tweet', url: payload.tweet_url }]]
-              };
-              const tgRes = await sendTelegramBroadcast(env, msg, replyMarkup, !!payload.is_x_list);
-              if (tgRes.ok) await markSent(env.DB, payload.tweet_id, formatTelegramMessageIds(tgRes.results));
-           }
-        }
+         const sendDecision = await shouldSendTelegram(env.DB, env, scored);
+         if (sendDecision.ok) {
+             const messages = {
+               ru: formatTelegramMessage(scored, 'ru'),
+               en: formatTelegramMessage(scored, 'en')
+             };
+             if (messages.ru && messages.en) {
+                const replyMarkup = {
+                  inline_keyboard: [[{ text: 'Open Tweet', url: payload.tweet_url }]]
+                };
+                const tgRes = await sendTelegramBroadcast(env, messages, replyMarkup, !!payload.is_x_list);
+                if (tgRes.ok) await markSent(env.DB, payload.tweet_id, formatTelegramMessageIds(tgRes.results));
+             }
+          }
        return new Response(JSON.stringify({ status: 'retry_attempted', send_decision: sendDecision.reason || 'sent' }), { headers: { 'Content-Type': 'application/json' } });
     }
     return new Response(JSON.stringify({ status: 'duplicate' }), { status: 409, headers: { 'Content-Type': 'application/json' } });
@@ -490,12 +497,15 @@ router.post('/ingest', async (request, env) => {
 
   const sendDecision = await shouldSendTelegram(env.DB, env, scored);
   if (sendDecision.ok) {
-    const message = formatTelegramMessage(scored);
-    if (message) {
+    const messages = {
+      ru: formatTelegramMessage(scored, 'ru'),
+      en: formatTelegramMessage(scored, 'en')
+    };
+    if (messages.ru && messages.en) {
       const replyMarkup = {
         inline_keyboard: [[{ text: 'Open Tweet', url: scored.tweet_url }]]
       };
-      const tgRes = await sendTelegramBroadcast(env, message, replyMarkup, !!payload.is_x_list);
+      const tgRes = await sendTelegramBroadcast(env, messages, replyMarkup, !!payload.is_x_list);
       if (tgRes.ok) {
         await markSent(env.DB, scored.tweet_id, formatTelegramMessageIds(tgRes.results));
       }

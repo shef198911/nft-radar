@@ -23,15 +23,15 @@ function formatAuthor(data) {
   };
 }
 
-export function formatTelegramMessage(data) {
-  let emoji = '🟢';
+export function formatTelegramMessage(data, lang = 'ru') {
+  let emoji = '🚨';
   if (data.priority === 'HOT') emoji = '🔥';
-  else if (data.priority === 'HIGH') emoji = '🟡';
-  else if (data.priority === 'NORMAL') emoji = '⚪';
+  else if (data.priority === 'HIGH') emoji = '🚨';
+  else if (data.priority === 'NORMAL') emoji = '👀';
   
   let header = `<b>${emoji} NFT OPPORTUNITY</b>`;
   if (data.chain && data.chain !== 'Unknown') {
-    let chainEmoji = '⛓️';
+    let chainEmoji = '🔗';
     if (data.chain === 'Robinhood Chain') chainEmoji = '🦊';
     else if (data.chain === 'Solana') chainEmoji = '🟣';
     else if (data.chain === 'Ethereum') chainEmoji = '🔷';
@@ -46,9 +46,9 @@ export function formatTelegramMessage(data) {
   let msg = `${header}\n\n`;
   
   if (data.project_name) {
-    msg += `📦 <b>Project:</b> ${escapeHTML(data.project_name)}\n`;
+    msg += `🚀 <b>Project:</b> ${escapeHTML(data.project_name)}\n`;
   } else if (data.display_name) {
-    msg += `📦 <b>Source:</b> ${escapeHTML(data.display_name)}\n`;
+    msg += `🚀 <b>Source:</b> ${escapeHTML(data.display_name)}\n`;
   }
 
   const author = formatAuthor(data);
@@ -72,7 +72,7 @@ export function formatTelegramMessage(data) {
   }
   
   if (data.wl_spots) {
-    msg += `🎫 <b>WL spots:</b> ${data.wl_spots}\n`;
+    msg += `🎁 <b>WL spots:</b> ${data.wl_spots}\n`;
   }
   
   if (data.price && data.price !== 'FREE') {
@@ -82,19 +82,19 @@ export function formatTelegramMessage(data) {
   }
   
   if (data.mint_time_raw) {
-    msg += `📅 <b>Mint:</b> ${escapeHTML(data.mint_time_raw)}\n`;
+    msg += `⏰ <b>Mint:</b> ${escapeHTML(data.mint_time_raw)}\n`;
   }
   
   if (data.supply) {
-    msg += `📊 <b>Supply:</b> ${data.supply}\n`;
+    msg += `📦 <b>Supply:</b> ${data.supply}\n`;
   }
   
   if (data.moni_score !== null && data.moni_score !== undefined) {
-    msg += `💎 <b>Moni Score:</b> ${data.moni_score.toLocaleString()}\n`;
+    msg += `🌟 <b>Moni Score:</b> ${data.moni_score.toLocaleString()}\n`;
   }
 
   if (data.link_risk_level && data.link_risk_level !== 'OK') {
-    const icon = data.link_risk_level === 'HIGH' ? '🚨' : (data.link_risk_level === 'MEDIUM' ? '⚠️' : '🔎');
+    const icon = data.link_risk_level === 'HIGH' ? '🚫' : (data.link_risk_level === 'MEDIUM' ? '⚠️' : '🛡️');
     msg += `${icon} <b>Link Risk:</b> ${escapeHTML(data.link_risk_level)}`;
     if (data.link_risk_reasons && data.link_risk_reasons.length > 0) {
       msg += ` - ${escapeHTML(data.link_risk_reasons.slice(0, 3).join('; '))}`;
@@ -102,9 +102,9 @@ export function formatTelegramMessage(data) {
     msg += '\n';
   }
   
-  msg += `⭐ <b>Radar Score:</b> ${data.score}/100\n\n`;
+  msg += `📈 <b>Radar Score:</b> ${data.score}/100\n\n`;
 
-  if (data.translated_text) {
+  if (lang === 'ru' && data.translated_text) {
     msg += `<blockquote expandable>${escapeHTML(data.translated_text)}</blockquote>\n\n`;
   } else if (data.text) {
     msg += `<blockquote expandable>${escapeHTML(data.text)}</blockquote>\n\n`;
