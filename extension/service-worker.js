@@ -282,7 +282,7 @@ function resumeScannerAfterWake() {
     return;
   }
   if (state.activeScrollGeneration) {
-    scheduleAlarm(ALARM_SCROLL_WATCHDOG, 30000);
+    scheduleAlarm(ALARM_SCROLL_WATCHDOG, 5 * 60 * 1000);
     return;
   }
   state.nextRunAt = null;
@@ -463,7 +463,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   
   if (msg.type === 'START_OBSERVER_PROXY') {
-    if (state.scannerTabId) chrome.tabs.sendMessage(state.scannerTabId, { type: 'START_OBSERVER' }).catch(()=>null);
+    if (state.scannerTabId) chrome.tabs.sendMessage(state.scannerTabId, { type: 'START_OBSERVER', isXList: msg.isXList }).catch(()=>null);
   }
 
   if (msg.type === 'CHECK_NEW_TWEETS_PROXY') {
@@ -554,11 +554,12 @@ function executeNextQuery(gen, resume = false) {
            state.activeScrollGeneration = gen;
            saveState();
            scheduleAlarm(ALARM_SCROLL_WATCHDOG, 6000 + (scrollCount * 25000) + 60000);
-           chrome.tabs.sendMessage(state.scannerTabId, {
-               type: 'START_SCROLL',
-               maxScrolls: scrollCount,
-               generation: gen
-            }).catch(()=>null);
+             chrome.tabs.sendMessage(state.scannerTabId, {
+                 type: 'START_SCROLL',
+                 maxScrolls: scrollCount,
+                 generation: gen,
+                 isXList: task.isXList
+              }).catch(()=>null);
         }
      }, 6000); // 6 seconds wait for SPA transition
   }, { forceReload: shouldForcePageReload() });

@@ -59,9 +59,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     maxScrolls = msg.maxScrolls || 5;
     currentGeneration = msg.generation;
     
-    console.log('[RADAR] Started scroll loop');
+    console.log('[RADAR] Started scroll loop (isXList: ' + msg.isXList + ')');
     
-    chrome.runtime.sendMessage({ type: 'START_OBSERVER_PROXY' });
+    chrome.runtime.sendMessage({ type: 'START_OBSERVER_PROXY', isXList: msg.isXList });
     
     (async function loop() {
       const keepScrolling = await doScroll();

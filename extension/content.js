@@ -151,12 +151,12 @@ function processArticles(articles, isInitial = false) {
     
     // IMPORTANT: Check Local Filter FIRST!
     let passLocal = false;
-    const X_LIST_ID = '2100655965091606668';
-    if (window.location.pathname.includes(`/i/lists/${X_LIST_ID}`) || window.location.pathname.includes(`/lists/${X_LIST_ID}`)) {
+    if (currentTaskIsXList) {
         passLocal = window.passesXListLocalFilter(data.text);
         data.is_x_list = true;
     } else {
         passLocal = window.passesLocalFilter(data.text);
+        data.is_x_list = false;
     }
     
     if (!passLocal) {
@@ -201,14 +201,17 @@ function processArticles(articles, isInitial = false) {
   pumpHoverQueue();
 }
 
+let currentTaskIsXList = false;
+
 function processTweets() {
   const articles = document.querySelectorAll('article[data-testid="tweet"]');
   processArticles(articles, false);
 }
 
-function startObserver() {
+function startObserver(isXList = false) {
+  currentTaskIsXList = isXList;
   if (!observer) {
-      console.log('[RADAR] Starting Observer');
+      console.log('[RADAR] Starting Observer (isXList: ' + isXList + ')');
       observer = new MutationObserver((mutations) => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(processTweets, 300);
@@ -232,7 +235,7 @@ function stopObserver() {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === 'START_OBSERVER') startObserver();
+  if (msg.type === 'START_OBSERVER') startObserver(msg.isXList);
   if (msg.type === 'STOP_OBSERVER') stopObserver();
   if (msg.type === 'CHECK_NEW_TWEETS') {
      sendResponse({ newCount: newTweetsInCurrentScroll });
