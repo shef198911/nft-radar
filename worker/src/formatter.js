@@ -29,7 +29,7 @@ export function formatTelegramMessage(data, lang = 'ru') {
   else if (data.priority === 'HIGH') emoji = '🚨';
   else if (data.priority === 'NORMAL') emoji = '👀';
   
-  let header = `<b>${emoji} NFT OPPORTUNITY</b>`;
+  let header = `<b>${emoji} ${data.is_x_list ? '🤖 X-LIST AI OPPORTUNITY' : 'NFT OPPORTUNITY'}</b>`;
   if (data.chain && data.chain !== 'Unknown') {
     let chainEmoji = '🔗';
     if (data.chain === 'Robinhood Chain') chainEmoji = '🦊';
@@ -56,6 +56,10 @@ export function formatTelegramMessage(data, lang = 'ru') {
     msg += `👤 <b>Author:</b> <a href="${escapeHTML(author.url)}">${escapeHTML(author.label)}</a>\n`;
   }
   
+  if (data.is_x_list && data.opportunity_type && data.opportunity_type !== 'UNKNOWN') {
+    msg += `🧠 <b>AI Category:</b> ${escapeHTML(data.opportunity_type.toUpperCase())}\n`;
+  }
+  
   const types = [];
   if (data.is_free) types.push('Free Mint');
   if (data.is_free_whitelist) types.push('Whitelist Free');
@@ -66,8 +70,8 @@ export function formatTelegramMessage(data, lang = 'ru') {
   if (data.is_gtd) types.push('GTD');
   
   if (types.length > 0) {
-    msg += `🎯 <b>Type:</b> ${types.join(' + ')}\n`;
-  } else if (data.opportunity_type && data.opportunity_type !== 'UNKNOWN') {
+    msg += `🎯 <b>Tags:</b> ${types.join(' + ')}\n`;
+  } else if (!data.is_x_list && data.opportunity_type && data.opportunity_type !== 'UNKNOWN') {
     msg += `🎯 <b>Type:</b> ${escapeHTML(data.opportunity_type)}\n`;
   }
   
@@ -102,7 +106,11 @@ export function formatTelegramMessage(data, lang = 'ru') {
     msg += '\n';
   }
   
-  msg += `📈 <b>Radar Score:</b> ${data.score}/100\n\n`;
+  if (data.is_x_list) {
+    msg += `🤖 <b>AI Score:</b> ${data.score}/100\n\n`;
+  } else {
+    msg += `📈 <b>Radar Score:</b> ${data.score}/100\n\n`;
+  }
 
   if (lang === 'ru' && data.translated_text) {
     msg += `<blockquote expandable>${escapeHTML(data.translated_text)}</blockquote>\n\n`;
