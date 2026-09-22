@@ -1,46 +1,39 @@
 export async function runAIFilter(tweetText, env) {
-  const prompt = `You are an AI classifier for a Crypto/NFT Twitter Radar.
-Your task is to analyze the following tweet and return a JSON object evaluating its content based on strict rules.
+  const prompt = `You are an AI classifier for an exclusive "X Alpha" Crypto/Web3 Radar.
+Your task is to analyze the following tweet from a curated list of top crypto influencers and return a JSON object evaluating its "Alpha" value.
 
 Rules:
-1. Is it relevant? (Crypto, NFT, airdrop, testnet, mainnet, mint, whitelist, security, on-chain activity)
-2. Does it contain specific NEW and ACTIONABLE information? (e.g. specific project, event, date, action)
-3. Is it promotional or engagement bait? (e.g. referral links, "use my code", giveaway, "what do you think?", pure opinion without facts)
+1. Is it relevant to Web3 Alpha? (Crypto narratives, token analysis, breaking crypto news, smart money moves, altcoin setups, early project discovery, DeFi strategies, NFT mints, airdrops, security alerts, on-chain activity)
+2. Does it contain specific, valuable, or new information? (e.g., a specific project, token ticker, upcoming event, deep dive thread, analytical insight, contract, hidden gem)
+3. Reject low-effort engagement bait and pure noise. (e.g. "what do you think?", GM/GN, empty giveaways, simple retweets without added value)
 
-Scoring system (sum up the points):
-+3: NFT / mint / whitelist / allowlist / claim
-+3: airdrop / eligibility / snapshot
-+3: testnet / mainnet / launch
-+3: specific actionable step for user
-+3: new project information
-+2: specific date
-+2: specific contract / on-chain information
-+2: funding
-+2: partnership / integration
-+2: specific NFT collection
-+1: points / rewards
+Scoring system (sum up the points, minimum 3 points needed to pass):
++5: Major breaking news, critical security alert, exploit, or highly actionable early alpha
++4: Deep dive thread, analytical insight, tokenomics breakdown, or smart money tracking
++3: Specific project launch, token listing, testnet/mainnet launch, airdrop eligibility, snapshot
++3: Specific altcoin setup, DeFi strategy, or yield farming opportunity
++3: New NFT mint, whitelist, allowlist, or claim info
++2: Mentions a specific token ticker, contract address, or specific date
++2: Funding news, partnerships, or integrations
++1: General crypto ecosystem updates or rewards
 
 Penalties:
--5: giveaway
--5: referral / affiliate
--4: clear advertisement
--3: engagement bait
--3: meme
--3: pure opinion
--3: GM/GN
--2: casual conversation
+-10: Giveaway, referral link, affiliate code
+-5: Engagement bait ("drop your wallet", "who is bullish?")
+-3: Pure meme or empty opinion without facts
+-3: Casual conversation, GM/GN
 
 JSON Schema:
 {
   "relevant": boolean,
-  "category": "nft" | "mint" | "whitelist" | "airdrop" | "eligibility" | "claim" | "testnet" | "mainnet" | "launch" | "token" | "listing" | "funding" | "partnership" | "integration" | "security" | "onchain" | "other",
+  "category": "alpha" | "news" | "analysis" | "defi" | "nft" | "mint" | "airdrop" | "testnet" | "launch" | "token" | "security" | "onchain" | "other",
   "actionable": boolean,
   "new_information": boolean,
   "promotional": boolean,
   "engagement_bait": boolean,
   "score": number,
   "reason": "short explanation",
-  "translated_text": "Полный точный перевод оригинального твита на русский язык (сохраняй форматирование)"
+  "translated_text": "полный и точный перевод текста твита на русский язык (сохраняйте все термины, тикеры и сленг)"
 }
 
 Tweet to analyze:
