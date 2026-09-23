@@ -455,7 +455,7 @@ export async function getOpenSeaScanStatus(db) {
   };
 }
 
-async function getOpenSeaApiKey(env) {
+export async function getOpenSeaApiKey(env) {
   if (env.OPENSEA_API_KEY) return env.OPENSEA_API_KEY;
 
   await ensureOpenSeaAuthTable(env.DB);
@@ -494,7 +494,7 @@ async function getOpenSeaApiKey(env) {
   return apiKey;
 }
 
-async function fetchOpenSeaJson(path, apiKey) {
+export async function fetchOpenSeaJson(path, apiKey) {
   const response = await fetch(`${OPENSEA_API_BASE}${path}`, {
     headers: {
       'Accept': 'application/json',

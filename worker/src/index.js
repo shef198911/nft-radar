@@ -22,7 +22,20 @@ import {
 } from './opensea.js';
 import { runAIFilter } from './ai-classifier.js';
 
+import { handleTelegramWebhook, checkPriceAlerts } from './telegram-bot.js';
+
 const router = Router();
+
+router.post('/telegram/webhook', async (request, env) => {
+  return await handleTelegramWebhook(request, env);
+});
+
+router.get('/telegram/setup', async (request, env) => {
+  if (!isAuthorized(request, env)) return new Response('Unauthorized', { status: 401 });
+  const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setWebhook?url=https://nft-radar.icoshef.workers.dev/telegram/webhook`;
+  const res = await fetch(url).then(r => r.json());
+  return new Response(JSON.stringify(res), { headers: { 'Content-Type': 'application/json' } });
+});
 
 function getClientKey(request) {
   const url = new URL(request.url);
@@ -557,10 +570,14 @@ export default {
     if (controller?.cron === '0 18 * * *') {
       ctx.waitUntil(Promise.all([
         runOpenSeaScan(env),
-        sendDailySummary(env, scheduledAt)
+        sendDailySummary(env, scheduledAt),
+        checkPriceAlerts(env)
       ]));
     } else {
-      ctx.waitUntil(runOpenSeaScan(env));
+      ctx.waitUntil(Promise.all([
+        runOpenSeaScan(env),
+        checkPriceAlerts(env)
+      ]));
     }
   }
 };
