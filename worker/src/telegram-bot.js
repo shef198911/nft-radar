@@ -25,6 +25,10 @@ export async function handleTelegramWebhook(request, env) {
 
   if (!update.message || !update.message.text) return new Response('OK');
   
+  if (update.message.chat.type !== 'private') {
+    return new Response('OK');
+  }
+  
   const chatId = update.message.chat.id.toString();
   const text = update.message.text.trim();
   const now = new Date().toISOString();
