@@ -128,6 +128,8 @@ CREATE TABLE IF NOT EXISTS price_alerts (
   collection_name TEXT,
   baseline_price REAL,
   threshold_percent REAL NOT NULL,
+  threshold_type TEXT DEFAULT 'percent',
+  threshold_abs REAL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(chat_id, collection_slug)

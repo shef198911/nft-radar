@@ -47,13 +47,14 @@ export async function handleTelegramWebhook(request, env) {
   }
 
   if (text === '/list') {
-    const { results } = await env.DB.prepare('SELECT collection_name, threshold_percent, baseline_price FROM price_alerts WHERE chat_id = ?').bind(chatId).all();
+    const { results } = await env.DB.prepare('SELECT collection_name, threshold_type, threshold_abs, threshold_percent, baseline_price FROM price_alerts WHERE chat_id = ?').bind(chatId).all();
     if (!results || results.length === 0) {
       await sendTelegramMessage(env, chatId, "У вас нет отслеживаемых коллекций.");
     } else {
       let msg = "<b>Ваши коллекции:</b>\n\n";
       for (const row of results) {
-        msg += `🔹 <b>${row.collection_name}</b>\nПорог: ${row.threshold_percent}%\nТекущая база: ${row.baseline_price || 'неизвестно'} ETH\n\n`;
+        const thrText = row.threshold_type === 'abs' ? `${row.threshold_abs} ETH` : `${row.threshold_percent}%`;
+        msg += `🔹 <b>${row.collection_name}</b>\nПорог: ${thrText}\nТекущая база: ${row.baseline_price || 'неизвестно'} ETH\n\n`;
       }
       await sendTelegramMessage(env, chatId, msg);
     }
@@ -114,7 +115,7 @@ export async function handleTelegramWebhook(request, env) {
       const stateData = JSON.stringify({ slug, name, floor });
       await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('WAITING_PERCENT', stateData, now, chatId).run();
       
-      await sendTelegramMessage(env, chatId, `✅ Коллекция найдена: <b>${name}</b>\n\nТекущий Floor Price: <b>${floor} ETH</b>\n\nПри каком изменении цены (в процентах) присылать уведомление? Напишите число (например: 15)`);
+      await sendTelegramMessage(env, chatId, `✅ Коллекция найдена: <b>${name}</b>\n\nТекущий Floor Price: <b>${floor} ETH</b>\n\nПри каком изменении цены присылать уведомление?\n\nНапишите <b>процент</b> (например: 15%), если хотите отслеживать процентное изменение.\nИли напишите <b>сумму в ETH</b> (например: 0.05), если хотите отслеживать изменение на конкретную сумму.`);
     } catch (e) {
       console.error(e);
       await sendTelegramMessage(env, chatId, `❌ Ошибка при поиске коллекции <b>${slug}</b>. Проверьте ссылку или попробуйте позже.`);
@@ -124,22 +125,32 @@ export async function handleTelegramWebhook(request, env) {
   }
 
   if (user.state === 'WAITING_PERCENT') {
-    const percent = parseFloat(text.replace('%', '').replace(',', '.'));
-    if (isNaN(percent) || percent <= 0) {
-      await sendTelegramMessage(env, chatId, "❌ Пожалуйста, введите корректное число (например: 15 или 5.5)");
+    const isPercent = text.includes('%');
+    const val = parseFloat(text.replace('%', '').replace(/eth/i, '').replace(',', '.').trim());
+    
+    if (isNaN(val) || val <= 0) {
+      await sendTelegramMessage(env, chatId, "❌ Пожалуйста, введите корректное число (например: 15% или 0.05)");
       return new Response('OK');
     }
+
+    const type = isPercent ? 'percent' : 'abs';
+    const percentVal = isPercent ? val : 0;
+    const absVal = isPercent ? 0 : val;
 
     try {
       const data = JSON.parse(user.state_data);
       await env.DB.prepare(`
-        INSERT OR REPLACE INTO price_alerts (chat_id, collection_slug, collection_name, baseline_price, threshold_percent, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).bind(chatId, data.slug, data.name, data.floor, percent, now, now).run();
+        INSERT OR REPLACE INTO price_alerts (chat_id, collection_slug, collection_name, baseline_price, threshold_percent, threshold_type, threshold_abs, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(chatId, data.slug, data.name, data.floor, percentVal, type, absVal, now, now).run();
       
       await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('IDLE', null, now, chatId).run();
       
-      await sendTelegramMessage(env, chatId, `🚀 Отлично! Теперь я отслеживаю <b>${data.name}</b>.\nЯ пришлю уведомление, если цена (${data.floor} ETH) изменится на <b>${percent}%</b> или больше.`);
+      if (isPercent) {
+        await sendTelegramMessage(env, chatId, `🚀 Отлично! Теперь я отслеживаю <b>${data.name}</b>.\nЯ пришлю уведомление, если цена (${data.floor} ETH) изменится на <b>${val}%</b> или больше.`);
+      } else {
+        await sendTelegramMessage(env, chatId, `🚀 Отлично! Теперь я отслеживаю <b>${data.name}</b>.\nЯ пришлю уведомление, если цена (${data.floor} ETH) изменится на <b>${val} ETH</b> или больше.`);
+      }
     } catch (e) {
       console.error(e);
       await sendTelegramMessage(env, chatId, "❌ Произошла ошибка. Начните заново с команды /track");
@@ -200,10 +211,25 @@ export async function checkPriceAlerts(env) {
 
     const diff = Math.abs(currentFloor - baseFloor);
     const percentChange = (diff / baseFloor) * 100;
+    
+    let isTriggered = false;
+    let thresholdText = '';
 
-    if (percentChange >= alert.threshold_percent) {
+    if (alert.threshold_type === 'abs') {
+      if (diff >= alert.threshold_abs) {
+        isTriggered = true;
+        thresholdText = `на ${alert.threshold_abs} ETH`;
+      }
+    } else {
+      if (percentChange >= alert.threshold_percent) {
+        isTriggered = true;
+        thresholdText = `на ${percentChange.toFixed(1)}%`;
+      }
+    }
+
+    if (isTriggered) {
       const direction = currentFloor > baseFloor ? '📈 Выросла' : '📉 Упала';
-      const msg = `🚨 <b>Алерт: ${alert.collection_name}</b>\n\nЦена ${direction} на <b>${percentChange.toFixed(1)}%</b>!\n\nСтарая цена: ${baseFloor} ETH\nНовая цена: <b>${currentFloor} ETH</b>\n\n📊 Объем: ${stats.volume.toFixed(2)} ETH\n🛒 Продажи: ${stats.sales}`;
+      const msg = `🚨 <b>Алерт: ${alert.collection_name}</b>\n\nЦена ${direction} ${thresholdText}!\n\nСтарая цена: ${baseFloor} ETH\nНовая цена: <b>${currentFloor} ETH</b>\n\n📊 Объем: ${stats.volume.toFixed(2)} ETH\n🛒 Продажи: ${stats.sales}`;
       
       await sendTelegramMessage(env, alert.chat_id, msg);
       
