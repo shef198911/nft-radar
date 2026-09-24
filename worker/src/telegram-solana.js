@@ -55,7 +55,7 @@ export async function handleSolanaCallback(data, chatId, messageId, env, update)
     const { results } = await env.DB.prepare('SELECT id FROM solana_wallets WHERE chat_id = ?').bind(chatId).all();
     const count = results ? results.length : 0;
     
-    const text = `🟣 <b>Solana Wallet Tracker</b>\n\nОтслеживается:\n${count} кошелька(ов)\n\nАктивных уведомлений:\n${count}`;
+    const text = `◎ <b>Solana Wallet Tracker</b>\n\nОтслеживается:\n${count} кошелька(ов)\n\nАктивных уведомлений:\n${count}\nㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤ`;
     const kb = [
       [{ text: "👛 Мои кошельки", callback_data: "solana_list" }],
       [{ text: "➕ Добавить кошелёк", callback_data: "solana_add" }],
@@ -68,7 +68,7 @@ export async function handleSolanaCallback(data, chatId, messageId, env, update)
 
   if (data === 'solana_list') {
     const { results } = await env.DB.prepare('SELECT * FROM solana_wallets WHERE chat_id = ?').bind(chatId).all();
-    let text = `🟣 <b>Solana Wallets</b>\n\nОтслеживается:\n${results ? results.length : 0} кошелька(ов)\n`;
+    let text = `◎ <b>Solana Wallets</b>\n\nОтслеживается:\n${results ? results.length : 0} кошелька(ов)\n\nㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤ`;
     let kb = [];
     if (results) {
       for (const w of results) {
@@ -89,7 +89,7 @@ export async function handleSolanaCallback(data, chatId, messageId, env, update)
     let bal = '?';
     try { bal = await getWalletBalance(w.address, env); } catch(e){}
 
-    const text = `🟣 Solana\n\n👛 <b>${w.name}</b>\n<code>${w.address}</code>\n\n💰 Portfolio\n${bal} SOL`;
+    const text = `◎ Solana\n\n👛 <b>${w.name}</b>\n<code>${w.address}</code>\n\n💰 Portfolio\n${bal} SOL`;
     const kb = [
       [{ text: "🔔 События", callback_data: `sol_filters:${id}` }],
       [{ text: "🔗 Открыть кошелёк", url: `https://solscan.io/account/${w.address}` }],
@@ -155,7 +155,7 @@ export async function handleSolanaText(text, chatId, user, env) {
     let bal = '?';
     try { bal = await getWalletBalance(addr, env); } catch(e){}
 
-    const msg = `🔎 <b>Кошелёк найден</b>\n\n🟣 Solana\n<code>${addr}</code>\n\nSOL:\n${bal} SOL\n\nДобавить этот кошелёк в мониторинг?`;
+    const msg = `🔎 <b>Кошелёк найден</b>\n\n◎ Solana\n<code>${addr}</code>\n\nSOL:\n${bal} SOL\n\nДобавить этот кошелёк в мониторинг?`;
     await callTelegramApi(env, 'sendMessage', {
       chat_id: chatId, text: msg, parse_mode: 'HTML',
       reply_markup: { inline_keyboard: [[{ text: "✅ Добавить", callback_data: `solana_confirm:${addr}` }, { text: "❌ Отмена", callback_data: "solana_home" }]] }
@@ -178,7 +178,7 @@ export async function handleSolanaText(text, chatId, user, env) {
     
     await callTelegramApi(env, 'sendMessage', {
       chat_id: chatId, text: "✅ <b>Кошелёк добавлен!</b>", parse_mode: 'HTML',
-      reply_markup: { inline_keyboard: [[{ text: "🟣 Открыть Solana Tracker", callback_data: "solana_home" }]] }
+      reply_markup: { inline_keyboard: [[{ text: "◎ Открыть Solana Tracker", callback_data: "solana_home" }]] }
     });
     return true;
   }

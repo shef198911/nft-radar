@@ -86,10 +86,10 @@ async function sendNftHome(env, chatId, user, messageId) {
 }
 
 async function sendWalletHome(env, chatId, messageId) {
-  const text = `👛 <b>Wallet Tracker</b>\n\nВыберите блокчейн:`;
+  const text = `👛 <b>Wallet Tracker</b>\n\nВыберите блокчейн:\nㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤ`;
   const reply_markup = {
     inline_keyboard: [
-      [{ text: "🟣 Solana", callback_data: "solana_home" }, { text: "🔷 EVM", callback_data: "evm_home" }],
+      [{ text: "◎ Solana", callback_data: "solana_home" }, { text: "⟠ EVM", callback_data: "evm_home" }],
       [{ text: "◀️ Главное меню", callback_data: "home" }]
     ]
   };
