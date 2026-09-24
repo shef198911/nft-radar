@@ -1,5 +1,6 @@
 import { fetchOpenSeaJson, getOpenSeaApiKey } from './opensea.js';
 import { t } from './i18n.js';
+import { handleSolanaCallback, handleSolanaText } from './telegram-solana.js';
 
 async function callTelegramApi(env, method, payload) {
   const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`;
@@ -86,6 +87,20 @@ async function sendHomeMenu(env, chatId, user, messageIdToEdit = null) {
   }
 }
 
+
+async function sendSolanaHome(env, chatId, user, messageId) {
+  const { results } = await env.DB.prepare('SELECT id FROM solana_wallets WHERE chat_id = ?').bind(chatId).all();
+  const count = results ? results.length : 0;
+  const text = "🟣 <b>Solana Wallet Tracker</b>\n\nОтслеживается:\n" + count + " кошелька(ов)\n\nАктивных уведомлений:\n" + count;
+  const kb = [
+    [{ text: "👛 Мои кошельки", callback_data: "solana_list" }],
+    [{ text: "➕ Добавить кошелёк", callback_data: "solana_add" }],
+    [{ text: "🔔 Уведомления", callback_data: "solana_filters_main" }],
+    [{ text: "◀️ Главное меню", callback_data: "home" }]
+  ];
+  await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
+}
+
 export async function handleTelegramWebhook(request, env) {
   if (request.method !== 'POST') return new Response('OK');
   let update;
@@ -117,6 +132,14 @@ export async function handleTelegramWebhook(request, env) {
     }
 
     const lang = user.language || 'ru';
+
+    
+    const handled = await handleSolanaCallback(data, chatId, messageId, env, update);
+    if (handled) return new Response('OK');
+    if (!handled && (data === 'solana_home' || data.startsWith('sol_del:') || data.startsWith('sol_t_f:'))) {
+        // Recurse to handle updated data
+        return handleTelegramWebhook({ method: 'POST', json: () => Promise.resolve(update) }, env);
+    }
 
     if (data === 'home') {
       await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('IDLE', null, now, chatId).run();
@@ -358,6 +381,10 @@ export async function handleTelegramWebhook(request, env) {
   }
 
   const lang = user.language || 'ru';
+
+  
+  const handledText = await handleSolanaText(text, chatId, user, env);
+  if (handledText) return new Response('OK');
 
   if (text === '/start' || text === '/home' || text === '/cancel' || text === '🏠 Главное меню' || text === '🏠 Main Menu') {
     await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('IDLE', null, now, chatId).run();

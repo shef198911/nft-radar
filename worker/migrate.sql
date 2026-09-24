@@ -147,3 +147,32 @@ CREATE TABLE IF NOT EXISTS alert_history (
   new_price REAL,
   created_at TEXT
 );
+
+
+CREATE TABLE IF NOT EXISTS solana_wallets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  chat_id TEXT NOT NULL,
+  address TEXT NOT NULL,
+  name TEXT,
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS solana_filters (
+  wallet_id INTEGER PRIMARY KEY,
+  notify_swap INTEGER DEFAULT 1,
+  notify_transfer INTEGER DEFAULT 1,
+  notify_nft INTEGER DEFAULT 1,
+  notify_mint INTEGER DEFAULT 1,
+  notify_stake INTEGER DEFAULT 1,
+  notify_other INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS solana_tx_cache (
+  signature TEXT PRIMARY KEY,
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS app_state (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
