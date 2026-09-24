@@ -113,26 +113,19 @@ export function parseAlchemyWebhook(body) {
     const isToken = tx.category === 'token';
     const isInternal = tx.category === 'internal';
     const isExternal = tx.category === 'external'; // Native ETH
-    
-    // Some NFT transfers might be classified as token or erc721
     const isERC721 = tx.category === 'erc721' || tx.category === 'erc1155';
 
     const from = tx.fromAddress || tx.from;
     const to = tx.toAddress || tx.to;
     const hash = tx.hash;
-    const val = tx.value; // Value in decimal/formatted
-    const asset = tx.asset; // e.g. 'ETH', 'USDC'
+    const val = tx.value; 
+    const asset = tx.asset; 
     const explorerUrl = getExplorer(network, hash);
 
-    if (isExternal || isInternal) {
-      const msg = `⟠ <b>NATIVE TRANSFER (${chainName})</b>\n\n💰 <b>Сумма:</b>\n${val} ${asset || 'ETH'}\n\n👤 <b>От:</b>\n${shorten(from)}\n👤 <b>Кому:</b>\n${shorten(to)}\n\n⏳ ${time}\n<a href="${explorerUrl}">[ 🔗 Открыть в Explorer ]</a>`;
-      messages.push({ category: 'transfer', formatted: msg, hash, from, to });
-    } else if (isToken) {
-      const msg = `🪙 <b>TOKEN TRANSFER (${chainName})</b>\n\n💰 <b>Сумма:</b>\n${val} ${asset || 'Token'}\n\n👤 <b>От:</b>\n${shorten(from)}\n👤 <b>Кому:</b>\n${shorten(to)}\n\n⏳ ${time}\n<a href="${explorerUrl}">[ 🔗 Открыть в Explorer ]</a>`;
-      messages.push({ category: 'transfer', formatted: msg, hash, from, to });
+    if (isExternal || isInternal || isToken) {
+      messages.push({ category: 'transfer', network: chainName, asset: asset || 'ETH', value: val, hash, from, to, explorerUrl });
     } else if (isERC721) {
-      const msg = `🖼 <b>NFT TRANSFER (${chainName})</b>\n\n🆔 <b>Token ID:</b>\n${tx.erc721TokenId || 'Unknown'}\n\n👤 <b>От:</b>\n${shorten(from)}\n👤 <b>Кому:</b>\n${shorten(to)}\n\n⏳ ${time}\n<a href="${explorerUrl}">[ 🔗 Открыть в Explorer ]</a>`;
-      messages.push({ category: 'nft', formatted: msg, hash, from, to });
+      messages.push({ category: 'nft', network: chainName, asset: 'NFT', tokenId: tx.erc721TokenId || 'Unknown', hash, from, to, explorerUrl });
     }
   }
 

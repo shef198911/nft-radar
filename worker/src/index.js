@@ -635,13 +635,11 @@ router.post('/evm/webhook', async (request, env) => {
     const messages = parseAlchemyWebhook(body);
     if (!messages || messages.length === 0) return new Response('OK');
     
-    // We get the involved addresses
-    // For each message, we need to check which tracked wallet matches
     for (const msg of messages) {
       const fromAddr = msg.from ? msg.from.toLowerCase() : '';
       const toAddr = msg.to ? msg.to.toLowerCase() : '';
       
-      const { results } = await env.DB.prepare('SELECT w.chat_id, f.notify_transfer, f.notify_swap, f.notify_nft FROM evm_wallets w JOIN evm_filters f ON w.id = f.wallet_id WHERE LOWER(w.address) = ? OR LOWER(w.address) = ?').bind(fromAddr, toAddr).all();
+      const { results } = await env.DB.prepare('SELECT w.chat_id, w.name, w.address, f.notify_transfer, f.notify_swap, f.notify_nft FROM evm_wallets w JOIN evm_filters f ON w.id = f.wallet_id WHERE LOWER(w.address) = ? OR LOWER(w.address) = ?').bind(fromAddr, toAddr).all();
       
       if (results && results.length > 0) {
         for (const w of results) {
@@ -651,9 +649,35 @@ router.post('/evm/webhook', async (request, env) => {
           if (msg.category === 'nft' && w.notify_nft) shouldSend = true;
           
           if (shouldSend) {
+            const isReceived = w.address.toLowerCase() === toAddr;
+            const shorten = (a) => a ? `${a.slice(0, 4)}..${a.slice(-4)}` : 'Unknown';
+            const counterparty = isReceived ? shorten(fromAddr) : shorten(toAddr);
+            
+            const netIcon = msg.network === 'Base' ? '🔵' : msg.network === 'Polygon' ? '🟣' : msg.network === 'Arbitrum' ? '🔵' : msg.network === 'Optimism' ? '🔴' : '🔗';
+            
+            let formatted = `<a href="https://etherscan.io/address/${w.address}"><b>${w.name}</b></a> · ${netIcon} <b>${msg.network.toUpperCase()}</b>
+`;
+            
+            if (msg.category === 'transfer') {
+                const icon = isReceived ? '🤑' : '💸';
+                const action = isReceived ? 'Получено:' : 'Отправлено:';
+                const dir = isReceived ? '📥 От:' : '📤 На:';
+                formatted += `
+${icon} ${action} ${msg.value} ${msg.asset} ${dir} ${counterparty}`;
+            } else {
+                const icon = isReceived ? '🖼' : '🖼';
+                const action = isReceived ? 'Получен NFT:' : 'Отправлен NFT:';
+                const dir = isReceived ? '📥 От:' : '📤 На:';
+                formatted += `
+${icon} ${action} ID ${msg.tokenId} ${dir} ${counterparty}`;
+            }
+            
+            formatted += `
+<a href="${msg.explorerUrl}">🔗 Tx hash</a>`;
+
             await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: w.chat_id, text: msg.formatted, parse_mode: 'HTML', disable_web_page_preview: true })
+              body: JSON.stringify({ chat_id: w.chat_id, text: formatted, parse_mode: 'HTML', disable_web_page_preview: true })
             });
           }
         }
