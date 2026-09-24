@@ -47,9 +47,23 @@ export async function handleSolanaCallback(data, chatId, messageId, env, update)
 
     await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('IDLE', null, now, chatId).run();
     
-    // Simulate solana_home
     update.callback_query.data = 'solana_home';
-    return false; // Let it fall through or we can just send it here. Actually return false won't work well.
+    return false; 
+  }
+
+  if (data === 'solana_home') {
+    const { results } = await env.DB.prepare('SELECT id FROM solana_wallets WHERE chat_id = ?').bind(chatId).all();
+    const count = results ? results.length : 0;
+    
+    const text = `🟣 <b>Solana Wallet Tracker</b>\n\nОтслеживается:\n${count} кошелька(ов)\n\nАктивных уведомлений:\n${count}`;
+    const kb = [
+      [{ text: "👛 Мои кошельки", callback_data: "solana_list" }],
+      [{ text: "➕ Добавить кошелёк", callback_data: "solana_add" }],
+      [{ text: "🔔 Уведомления", callback_data: "solana_filters_main" }],
+      [{ text: "◀️ Wallet Tracker", callback_data: "wallet_home" }]
+    ];
+    await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
+    return true;
   }
 
   if (data === 'solana_list') {
@@ -75,7 +89,7 @@ export async function handleSolanaCallback(data, chatId, messageId, env, update)
     let bal = '?';
     try { bal = await getWalletBalance(w.address, env); } catch(e){}
 
-    const text = `🟣 Solana\n\n👛 <b>${w.name}</b>\n<code>${w.address}</code>\n\n────────────────\n\n💰 Portfolio\n${bal} SOL\n\n────────────────`;
+    const text = `🟣 Solana\n\n👛 <b>${w.name}</b>\n<code>${w.address}</code>\n\n💰 Portfolio\n${bal} SOL`;
     const kb = [
       [{ text: "🔔 События", callback_data: `sol_filters:${id}` }],
       [{ text: "🔗 Открыть кошелёк", url: `https://solscan.io/account/${w.address}` }],
@@ -122,7 +136,7 @@ export async function handleSolanaCallback(data, chatId, messageId, env, update)
     const col = `notify_${field}`;
     await env.DB.prepare(`UPDATE solana_filters SET ${col} = CASE WHEN ${col} = 1 THEN 0 ELSE 1 END WHERE wallet_id = ?`).bind(id).run();
     update.callback_query.data = `sol_filters:${id}`;
-    return false; // let it recurse
+    return false;
   }
 
   return false;

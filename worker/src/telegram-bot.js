@@ -1,6 +1,6 @@
 import { fetchOpenSeaJson, getOpenSeaApiKey } from './opensea.js';
-import { t } from './i18n.js';
 import { handleSolanaCallback, handleSolanaText } from './telegram-solana.js';
+import { t } from './i18n.js';
 
 async function callTelegramApi(env, method, payload) {
   const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`;
@@ -29,46 +29,29 @@ function calculateBounds(base, alert) {
   }
 }
 
-async function sendHomeMenu(env, chatId, user, messageIdToEdit = null) {
-  if (!user.language) {
-    const text = "Выберите язык / Choose language:";
-    const reply_markup = {
-      inline_keyboard: [
-        [{ text: "🇷🇺 Русский", callback_data: "set_lang:ru" }],
-        [{ text: "🇬🇧 English", callback_data: "set_lang:en" }]
-      ]
-    };
-    if (messageIdToEdit) {
-      await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageIdToEdit, text, reply_markup });
-    } else {
-      await callTelegramApi(env, 'sendMessage', { chat_id: chatId, text, reply_markup });
-    }
-    return;
-  }
-
-  const lang = user.language;
-  const { results } = await env.DB.prepare('SELECT id, is_active FROM price_alerts WHERE chat_id = ?').bind(chatId).all();
-  const tracked = results ? results.length : 0;
-  const active = results ? results.filter(r => r.is_active === 1).length : 0;
-  
-  // Get last check time from the first alert's updated_at (approximate)
-  let lastCheck = t(lang, 'time_never');
-  const alert = await env.DB.prepare('SELECT updated_at FROM price_alerts ORDER BY updated_at DESC LIMIT 1').first();
-  if (alert && alert.updated_at) {
-    lastCheck = new Date(alert.updated_at).toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-  }
-
-  const { results: solRes } = await env.DB.prepare('SELECT id FROM solana_wallets WHERE chat_id = ?').bind(chatId).all();
-  const solTracked = solRes ? solRes.length : 0;
-
-  const text = `🤖 <b>Crypto Tracker</b>\n\nNFT-коллекции: ${tracked}\nSolana-кошельки: ${solTracked}\n\nАктивных NFT-алертов: ${active}\n\n────────────────\n\n🖼 <b>NFT</b>`;
+async function sendLanguageMenu(env, chatId, messageIdToEdit = null) {
+  const text = "Выберите язык / Choose language:";
   const reply_markup = {
     inline_keyboard: [
-      [{ text: "📊 NFT коллекции", callback_data: "my_colls" }, { text: "➕ Добавить NFT", callback_data: "track_add" }],
-      [{ text: "────────────────", callback_data: "none" }],
-      [{ text: "👛 Wallet Tracker", callback_data: "none" }],
-      [{ text: "🟣 Solana", callback_data: "solana_home" }, { text: "⟨ EVM — SOON ⟩", callback_data: "none" }],
-      [{ text: "────────────────", callback_data: "none" }],
+      [{ text: "🇷🇺 Русский", callback_data: "set_lang:ru" }, { text: "🇬🇧 English", callback_data: "set_lang:en" }]
+    ]
+  };
+  if (messageIdToEdit) {
+    await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageIdToEdit, text, reply_markup });
+  } else {
+    await callTelegramApi(env, 'sendMessage', { chat_id: chatId, text, reply_markup });
+  }
+}
+
+async function sendHomeMenu(env, chatId, user, messageIdToEdit = null) {
+  if (!user.language) {
+    return await sendLanguageMenu(env, chatId, messageIdToEdit);
+  }
+
+  const text = `🤖 <b>Crypto Tracker</b>\n\nДобро пожаловать в мультитул.\nВыберите нужный раздел:`;
+  const reply_markup = {
+    inline_keyboard: [
+      [{ text: "🖼 NFT Tracker", callback_data: "nft_home" }, { text: "👛 Wallet Tracker", callback_data: "wallet_home" }],
       [{ text: "⚙️ Настройки", callback_data: "settings" }, { text: "📖 Как это работает", callback_data: "how_it_works" }]
     ]
   };
@@ -76,19 +59,41 @@ async function sendHomeMenu(env, chatId, user, messageIdToEdit = null) {
   if (messageIdToEdit) {
     await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageIdToEdit, text, parse_mode: 'HTML', reply_markup });
   } else {
-    // Send persistent bottom keyboard if needed
-    await callTelegramApi(env, 'sendMessage', {
-      chat_id: chatId,
-      text: "...",
-      reply_markup: { keyboard: [[{ text: lang === 'ru' ? "🏠 Главное меню" : "🏠 Main Menu" }]], resize_keyboard: true, is_persistent: true }
-    }).then(async (res) => {
-      const data = await res.json();
-      await callTelegramApi(env, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', reply_markup });
-      if (data.result && data.result.message_id) {
-        await callTelegramApi(env, 'deleteMessage', { chat_id: chatId, message_id: data.result.message_id }).catch(() => {});
-      }
-    });
+    await callTelegramApi(env, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', reply_markup });
   }
+}
+
+async function sendNftHome(env, chatId, user, messageId) {
+  const lang = user.language || 'ru';
+  const { results } = await env.DB.prepare('SELECT id, is_active FROM price_alerts WHERE chat_id = ?').bind(chatId).all();
+  const tracked = results ? results.length : 0;
+  const active = results ? results.filter(r => r.is_active === 1).length : 0;
+  
+  let lastCheck = t(lang, 'time_never');
+  const alert = await env.DB.prepare('SELECT updated_at FROM price_alerts ORDER BY updated_at DESC LIMIT 1').first();
+  if (alert && alert.updated_at) {
+    lastCheck = new Date(alert.updated_at).toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  const text = `🖼 <b>NFT Tracker</b>\n\nОтслеживается коллекций: ${tracked}\nАктивных алертов: ${active}\nПоследняя проверка: ${lastCheck}`;
+  const reply_markup = {
+    inline_keyboard: [
+      [{ text: "📊 Мои коллекции", callback_data: "my_colls" }, { text: "➕ Добавить коллекцию", callback_data: "track_add" }],
+      [{ text: "◀️ Главное меню", callback_data: "home" }]
+    ]
+  };
+  await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', reply_markup });
+}
+
+async function sendWalletHome(env, chatId, messageId) {
+  const text = `👛 <b>Wallet Tracker</b>\n\nВыберите блокчейн:`;
+  const reply_markup = {
+    inline_keyboard: [
+      [{ text: "🟣 Solana", callback_data: "solana_home" }, { text: "🔷 EVM", callback_data: "evm_home" }],
+      [{ text: "◀️ Главное меню", callback_data: "home" }]
+    ]
+  };
+  await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', reply_markup });
 }
 
 export async function handleTelegramWebhook(request, env) {
@@ -98,7 +103,6 @@ export async function handleTelegramWebhook(request, env) {
 
   const now = new Date().toISOString();
 
-  // Handle Callback Queries
   if (update.callback_query) {
     const cb = update.callback_query;
     const chatId = cb.message.chat.id.toString();
@@ -112,21 +116,14 @@ export async function handleTelegramWebhook(request, env) {
       user = { state: 'IDLE', state_data: null, language: null };
       await env.DB.prepare('INSERT INTO telegram_users (chat_id, state, updated_at) VALUES (?, ?, ?)').bind(chatId, 'IDLE', now).run();
     }
+    const lang = user.language || 'ru';
 
     if (data.startsWith('set_lang:')) {
-      const lang = data.split(':')[1];
-      await env.DB.prepare('UPDATE telegram_users SET language = ?, updated_at = ? WHERE chat_id = ?').bind(lang, now, chatId).run();
-      user.language = lang;
+      const newLang = data.split(':')[1];
+      await env.DB.prepare('UPDATE telegram_users SET language = ?, state = ?, updated_at = ? WHERE chat_id = ?').bind(newLang, 'IDLE', now, chatId).run();
+      user.language = newLang;
       await sendHomeMenu(env, chatId, user, messageId);
       return new Response('OK');
-    }
-
-const lang = user.language || 'ru';
-
-    const handled = await handleSolanaCallback(data, chatId, messageId, env, update);
-    if (handled) return new Response('OK');
-    if (!handled && (data === 'solana_home' || data.startsWith('sol_del:') || data.startsWith('sol_t_f:'))) {
-        return handleTelegramWebhook({ method: 'POST', json: () => Promise.resolve(update) }, env);
     }
 
     if (data === 'home') {
@@ -134,225 +131,195 @@ const lang = user.language || 'ru';
       await sendHomeMenu(env, chatId, user, messageId);
       return new Response('OK');
     }
-
-    if (data === 'how_it_works') {
-      await callTelegramApi(env, 'editMessageText', {
-        chat_id: chatId, message_id: messageId,
-        text: t(lang, 'how_it_works'), parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_home'), callback_data: "home" }]] }
-      });
+    
+    if (data === 'nft_home') {
+      await sendNftHome(env, chatId, user, messageId);
+      return new Response('OK');
+    }
+    
+    if (data === 'wallet_home') {
+      await sendWalletHome(env, chatId, messageId);
       return new Response('OK');
     }
 
-    if (data === 'settings') {
-      await callTelegramApi(env, 'editMessageText', {
-        chat_id: chatId, message_id: messageId,
-        text: t(lang, 'settings_title'), parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [
-          [{ text: t(lang, 'btn_lang'), callback_data: "settings_lang" }],
-          [{ text: t(lang, 'btn_home'), callback_data: "home" }]
-        ]}
-      });
+    if (data === 'evm_home') {
+      await callTelegramApi(env, 'answerCallbackQuery', { callback_query_id: cb.id, text: "В разработке / Soon", show_alert: true });
       return new Response('OK');
     }
 
-    if (data === 'settings_lang') {
-      await env.DB.prepare('UPDATE telegram_users SET language = NULL, updated_at = ? WHERE chat_id = ?').bind(now, chatId).run();
-      user.language = null;
-      await sendHomeMenu(env, chatId, user, messageId);
+    // Solana Delegation
+    const handledSol = await handleSolanaCallback(data, chatId, messageId, env, update);
+    if (handledSol) return new Response('OK');
+    // For recursing solana actions that return false
+    if (!handledSol && (data === 'solana_home' || data.startsWith('sol_del:') || data.startsWith('sol_t_f:'))) {
+        return handleTelegramWebhook({ method: 'POST', json: () => Promise.resolve(update) }, env);
+    }
+
+    // --- NFT LOGIC ---
+    if (data === 'my_colls' || data === 'active_alerts') {
+      const { results } = await env.DB.prepare('SELECT id, collection_name, is_active FROM price_alerts WHERE chat_id = ?').bind(chatId).all();
+      let msgText = t(lang, 'no_collections');
+      let kb = [];
+      if (results && results.length > 0) {
+        msgText = t(lang, 'my_collections');
+        for (const r of results) {
+          const status = r.is_active ? '🟢' : '🔴';
+          kb.push([{ text: `${status} ${r.collection_name}`, callback_data: `view_coll:${r.id}` }]);
+        }
+      }
+      kb.push([{ text: "◀️ NFT Tracker", callback_data: "nft_home" }]);
+      
+      await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text: msgText, parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
       return new Response('OK');
     }
 
     if (data === 'track_add') {
-      await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('WAITING_LINK', null, now, chatId).run();
-      await callTelegramApi(env, 'editMessageText', {
-        chat_id: chatId, message_id: messageId,
-        text: t(lang, 'add_prompt'), parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_home'), callback_data: "home" }]] }
-      });
+      await env.DB.prepare('UPDATE telegram_users SET state = ?, updated_at = ? WHERE chat_id = ?').bind('WAITING_LINK', now, chatId).run();
+      await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text: t(lang, 'send_link'), parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_cancel'), callback_data: "nft_home" }]] } });
       return new Response('OK');
     }
 
-    if (data.startsWith('setup_alert:') || data.startsWith('edit_alert:')) {
-      const isEdit = data.startsWith('edit_alert:');
-      const payloadId = data.split(':')[1];
-      
-      let stateDataStr, name, floor, thresholdText = '';
-      if (isEdit) {
-        const alert = await env.DB.prepare('SELECT * FROM price_alerts WHERE id = ?').bind(payloadId).first();
-        if (!alert) return new Response('OK');
-        name = alert.collection_name;
-        floor = alert.baseline_price;
-        thresholdText = getThresholdText(alert);
-        stateDataStr = JSON.stringify({ edit_id: payloadId, slug: alert.collection_slug, name, floor });
-        await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('WAITING_EDIT_THRESHOLD', stateDataStr, now, chatId).run();
-      } else {
-        // It's setup_alert:slug
-        stateDataStr = user.state_data;
-        if (!stateDataStr) return new Response('OK');
-        const parsed = JSON.parse(stateDataStr);
-        name = parsed.name;
-        floor = parsed.floor;
-        await env.DB.prepare('UPDATE telegram_users SET state = ?, updated_at = ? WHERE chat_id = ?').bind('WAITING_THRESHOLD', now, chatId).run();
-      }
+    if (data === 'settings') {
+      const kb = [
+        [{ text: t(lang, 'btn_lang'), callback_data: "settings_lang" }],
+        [{ text: "◀️ Главное меню", callback_data: "home" }]
+      ];
+      await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text: "⚙️ <b>Настройки</b>", parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
+      return new Response('OK');
+    }
 
-      const text = isEdit 
-        ? t(lang, 'edit_alert_prompt', { name, threshold: thresholdText })
-        : t(lang, 'setup_alert', { name, floor });
+    if (data === 'how_it_works') {
+      const txt = lang === 'ru' ? "Бот позволяет отслеживать цены NFT коллекций на OpenSea и активность кошельков Solana. Выберите нужный раздел в меню." : "This bot tracks OpenSea NFT floors and Solana wallets.";
+      await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text: txt, parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_home'), callback_data: "home" }]] } });
+      return new Response('OK');
+    }
+
+    if (data === 'settings_lang') {
+      await sendLanguageMenu(env, chatId, messageId);
+      return new Response('OK');
+    }
+
+    if (data.startsWith('setup_alert:')) {
+      const slug = data.split(':')[1];
+      const stateDataStr = JSON.stringify(JSON.parse(user.state_data || '{}'));
+      await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('WAITING_THRESHOLD', stateDataStr, now, chatId).run();
       
       const kb = [
-        [{ text: "±1%", callback_data: "set_thr:1%" }, { text: "±2%", callback_data: "set_thr:2%" }, { text: "±5%", callback_data: "set_thr:5%" }],
-        [{ text: "±10%", callback_data: "set_thr:10%" }, { text: "±15%", callback_data: "set_thr:15%" }, { text: "±20%", callback_data: "set_thr:20%" }],
-        [{ text: t(lang, 'btn_custom_percent'), callback_data: "set_thr_custom" }],
-        [{ text: isEdit ? t(lang, 'btn_back') : t(lang, 'btn_cancel'), callback_data: isEdit ? `view_coll:${payloadId}` : "home" }]
+        [{ text: "5%", callback_data: `set_thr:5` }, { text: "10%", callback_data: `set_thr:10` }, { text: "20%", callback_data: `set_thr:20` }],
+        [{ text: "0.01 ETH", callback_data: "set_thr:0.01eth" }, { text: "0.05 ETH", callback_data: "set_thr:0.05eth" }],
+        [{ text: t(lang, 'btn_custom_threshold'), callback_data: "set_thr_custom" }],
+        [{ text: t(lang, 'btn_cancel'), callback_data: "nft_home" }]
+      ];
+      await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text: t(lang, 'ask_threshold'), parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
+      return new Response('OK');
+    }
+
+    if (data === 'set_thr_custom') {
+      await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text: "Введите значение (например, 15% или 0.05)", parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_cancel'), callback_data: "nft_home" }]] } });
+      return new Response('OK');
+    }
+
+    if (data.startsWith('set_thr:')) {
+      const val = data.split(':')[1];
+      update.callback_query.message.text = val;
+      return handleTelegramWebhook({ method: 'POST', json: () => Promise.resolve({ message: update.callback_query.message, chat: update.callback_query.message.chat }) }, env);
+    }
+
+    if (data.startsWith('view_coll:')) {
+      const id = data.split(':')[1];
+      const alert = await env.DB.prepare('SELECT * FROM price_alerts WHERE id = ? AND chat_id = ?').bind(id, chatId).first();
+      if (!alert) return new Response('OK');
+      
+      const bounds = calculateBounds(alert.baseline_price, alert);
+      const text = t(lang, 'alert_card', {
+        name: alert.collection_name, 
+        floor: alert.baseline_price, 
+        threshold: getThresholdText(alert),
+        upper: bounds.upper, lower: bounds.lower, 
+        status: alert.is_active ? '🟢 ACTIVE' : '🔴 PAUSED',
+        updated: new Date(alert.updated_at).toLocaleTimeString(lang==='ru'?'ru-RU':'en-US', {hour:'2-digit', minute:'2-digit'})
+      });
+      
+      const kb = [
+        [{ text: t(lang, 'btn_refresh_floor'), callback_data: `refresh_coll:${id}` }],
+        [{ text: t(lang, 'btn_edit_threshold'), callback_data: `edit_alert:${id}` }],
+        [{ text: t(lang, 'btn_history'), callback_data: `hist_coll:${id}` }],
+        [{ text: alert.is_active ? t(lang, 'btn_pause') : t(lang, 'btn_resume'), callback_data: `do_del:${id}:pause` }],
+        [{ text: t(lang, 'btn_delete'), callback_data: `del_coll:${id}` }],
+        [{ text: "◀️ Назад", callback_data: "my_colls" }]
       ];
       await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
       return new Response('OK');
     }
 
-    if (data === 'set_thr_custom') {
-      await callTelegramApi(env, 'editMessageText', {
-        chat_id: chatId, message_id: messageId,
-        text: t(lang, 'custom_percent_prompt'), parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_cancel'), callback_data: "home" }]] }
-      });
-      return new Response('OK');
-    }
-
-    if (data.startsWith('set_thr:')) {
-      const valStr = data.split(':')[1];
-      // Reuse the text handling logic by simulating a message
-      update.message = { chat: { id: parseInt(chatId), type: 'private' }, text: valStr };
-      update.callback_query = null;
-      // Let it fall through to text handling below
-    }
-
-    if (data === 'my_colls' || data === 'active_alerts') {
-      const onlyActive = data === 'active_alerts';
-      let q = 'SELECT id, collection_name, threshold_type, threshold_abs, threshold_percent, baseline_price, is_active FROM price_alerts WHERE chat_id = ?';
-      if (onlyActive) q += ' AND is_active = 1';
-      const { results } = await env.DB.prepare(q).bind(chatId).all();
-      
-      const text = t(lang, onlyActive ? 'active_alerts_title' : 'my_collections', { total: results ? results.length : 0 });
-      let kb = [];
-      if (results) {
-        for (const row of results) {
-          const thrText = row.threshold_type === 'abs' ? `${row.threshold_abs} ETH` : `${row.threshold_percent}%`;
-          const icon = row.is_active ? '🟢' : '🔴';
-          kb.push([{ text: `${icon} ${row.collection_name} — ${row.baseline_price || 0} ETH · ±${thrText}`, callback_data: `view_coll:${row.id}` }]);
-        }
-      }
-      if (!onlyActive) {
-        kb.push([{ text: t(lang, 'btn_add_collection'), callback_data: "track_add" }]);
-        kb.push([{ text: t(lang, 'btn_active_alerts'), callback_data: "active_alerts" }]);
-      } else {
-        kb.push([{ text: t(lang, 'btn_my_collections'), callback_data: "my_colls" }]);
-      }
-      kb.push([{ text: t(lang, 'btn_home'), callback_data: "home" }]);
-
-      await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
-      return new Response('OK');
-    }
-
-    if (data.startsWith('view_coll:') || data.startsWith('refresh_coll:')) {
+    if (data.startsWith('edit_alert:')) {
       const id = data.split(':')[1];
-      const alert = await env.DB.prepare('SELECT * FROM price_alerts WHERE id = ? AND chat_id = ?').bind(id, chatId).first();
+      const alert = await env.DB.prepare('SELECT * FROM price_alerts WHERE id = ?').bind(id).first();
       if (!alert) return new Response('OK');
       
-      let floor = alert.baseline_price;
-      let change24h = '0';
-      let volume = '0';
+      const stateData = JSON.stringify({ edit_id: id, name: alert.collection_name, floor: alert.baseline_price });
+      await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('WAITING_EDIT_THRESHOLD', stateData, now, chatId).run();
       
-      if (data.startsWith('refresh_coll:')) {
-        try {
-          const apiKey = await getOpenSeaApiKey(env);
-          const stats = await fetchOpenSeaJson(`/collections/${alert.collection_slug}/stats`, apiKey);
-          floor = stats.total?.floor_price || floor;
-          volume = (stats.total?.volume || 0).toFixed(2);
-          if (stats.intervals && stats.intervals[0]) {
-            // approximating 24h change if available in API
-            // Note: OpenSea doesn't always provide floor_price change directly in stats, we might calculate volume change or ignore.
-            // Let's just use what we have or 0
-          }
-        } catch(e) {}
-      }
-
-      const thrText = getThresholdText(alert);
-      const bounds = calculateBounds(floor, alert);
-      const statusText = alert.is_active ? t(lang, 'status_active') : t(lang, 'status_inactive');
-
-      let text = t(lang, 'card_collection', {
-        name: alert.collection_name, floor, change24h, volume,
-        status: statusText, threshold: thrText, base: alert.baseline_price, upper: bounds.upper, lower: bounds.lower
-      });
-
-      if (data.startsWith('refresh_coll:')) {
-        const time = new Date().toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-        text = t(lang, 'refreshed', { name: alert.collection_name, floor, change24h, volume, time });
-      }
-
-      await callTelegramApi(env, 'editMessageText', {
-        chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [
-          [{ text: t(lang, 'btn_edit_alert'), callback_data: `edit_alert:${id}` }, { text: t(lang, 'btn_refresh'), callback_data: `refresh_coll:${id}` }],
-          [{ text: t(lang, 'btn_history'), callback_data: `hist_coll:${id}` }, { text: t(lang, 'btn_delete'), callback_data: `del_coll:${id}` }],
-          [{ text: t(lang, 'btn_back'), callback_data: "my_colls" }]
-        ]}
-      });
+      const kb = [
+        [{ text: "5%", callback_data: `set_thr:5` }, { text: "10%", callback_data: `set_thr:10` }],
+        [{ text: "0.01 ETH", callback_data: "set_thr:0.01eth" }, { text: "0.05 ETH", callback_data: "set_thr:0.05eth" }],
+        [{ text: "◀️ Назад", callback_data: `view_coll:${id}` }]
+      ];
+      await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text: "Установите новый порог:", parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
       return new Response('OK');
+    }
+
+    if (data.startsWith('refresh_coll:')) {
+      const id = data.split(':')[1];
+      const alert = await env.DB.prepare('SELECT collection_slug FROM price_alerts WHERE id = ?').bind(id).first();
+      if (!alert) return new Response('OK');
+      try {
+        const apiKey = await getOpenSeaApiKey(env);
+        const stats = await fetchOpenSeaJson(`/collections/${alert.collection_slug}/stats`, apiKey);
+        if (stats.total && typeof stats.total.floor_price === 'number') {
+          await env.DB.prepare('UPDATE price_alerts SET baseline_price = ?, updated_at = ? WHERE id = ?').bind(stats.total.floor_price, now, id).run();
+        }
+      } catch(e) {}
+      update.callback_query.data = `view_coll:${id}`;
+      return handleTelegramWebhook({ method: 'POST', json: () => Promise.resolve(update) }, env);
     }
 
     if (data.startsWith('hist_coll:')) {
       const id = data.split(':')[1];
-      const alert = await env.DB.prepare('SELECT collection_name FROM price_alerts WHERE id = ?').bind(id).first();
-      if (!alert) return new Response('OK');
-      
-      const { results } = await env.DB.prepare('SELECT * FROM alert_history WHERE alert_id = ? ORDER BY id DESC LIMIT 5').bind(id).all();
-      let text = t(lang, 'history_title', { name: alert.collection_name });
-      if (!results || results.length === 0) {
-        text += t(lang, 'history_empty');
-      } else {
-        for (const r of results) {
-          const time = new Date(r.created_at).toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' });
-          const dirIcon = r.direction === 'up' ? '↑' : '↓';
-          text += t(lang, 'history_item', { time, direction: dirIcon, percent: r.percent_change.toFixed(2), old: r.old_price, new: r.new_price });
-        }
+      const { results } = await env.DB.prepare('SELECT * FROM alert_history WHERE alert_id = ? ORDER BY created_at DESC LIMIT 5').bind(id).all();
+      let text = "📖 <b>История алертов</b>\n\n";
+      if (!results || results.length === 0) text += "Пусто.";
+      else {
+        results.forEach(r => {
+          const d = new Date(r.created_at).toLocaleDateString();
+          const p = r.percent_change.toFixed(1);
+          text += `${r.direction === 'up' ? '🟢' : '🔴'} ${d}: ${r.old_price} ➔ ${r.new_price} (${r.direction === 'up'?'+':'-'}${p}%)\n`;
+        });
       }
-      await callTelegramApi(env, 'editMessageText', {
-        chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_back'), callback_data: `view_coll:${id}` }]] }
-      });
+      await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: "◀️ Назад", callback_data: `view_coll:${id}` }]] } });
       return new Response('OK');
     }
 
     if (data.startsWith('del_coll:')) {
       const id = data.split(':')[1];
-      const alert = await env.DB.prepare('SELECT * FROM price_alerts WHERE id = ?').bind(id).first();
-      if (!alert) return new Response('OK');
-      const text = t(lang, 'confirm_delete', { name: alert.collection_name, floor: alert.baseline_price, threshold: getThresholdText(alert) });
-      await callTelegramApi(env, 'editMessageText', {
-        chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_yes_delete'), callback_data: `do_del:${id}` }], [{ text: t(lang, 'btn_cancel'), callback_data: `view_coll:${id}` }]] }
-      });
+      await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text: t(lang, 'confirm_delete'), parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: "Да, удалить", callback_data: `do_del:${id}:del` }, { text: "Нет", callback_data: `view_coll:${id}` }]] } });
       return new Response('OK');
     }
 
     if (data.startsWith('do_del:')) {
-      const id = data.split(':')[1];
-      const alert = await env.DB.prepare('SELECT collection_name FROM price_alerts WHERE id = ?').bind(id).first();
-      if (alert) {
+      const parts = data.split(':');
+      const id = parts[1];
+      const action = parts[2];
+      if (action === 'del') {
         await env.DB.prepare('DELETE FROM price_alerts WHERE id = ?').bind(id).run();
-        await env.DB.prepare('DELETE FROM alert_history WHERE alert_id = ?').bind(id).run();
-        await callTelegramApi(env, 'editMessageText', {
-          chat_id: chatId, message_id: messageId,
-          text: t(lang, 'deleted', { name: alert.collection_name }), parse_mode: 'HTML',
-          reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_my_collections'), callback_data: "my_colls" }], [{ text: t(lang, 'btn_home'), callback_data: "home" }]] }
-        });
+        update.callback_query.data = 'my_colls';
+        return handleTelegramWebhook({ method: 'POST', json: () => Promise.resolve(update) }, env);
+      } else if (action === 'pause') {
+        await env.DB.prepare('UPDATE price_alerts SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END WHERE id = ?').bind(id).run();
+        update.callback_query.data = `view_coll:${id}`;
+        return handleTelegramWebhook({ method: 'POST', json: () => Promise.resolve(update) }, env);
       }
-      return new Response('OK');
     }
-
-    if (!update.message) return new Response('OK'); // If it didn't fall through to text processing
   }
 
   // --- Handle Text Messages ---
@@ -368,57 +335,43 @@ const lang = user.language || 'ru';
     await env.DB.prepare('INSERT INTO telegram_users (chat_id, state, updated_at) VALUES (?, ?, ?)').bind(chatId, 'IDLE', now).run();
   }
 
-const lang = user.language || 'ru';
-
-  const handledText = await handleSolanaText(text, chatId, user, env);
-  if (handledText) return new Response('OK');
-
-  if (text === '/start' || text === '/home' || text === '/cancel' || text === '🏠 Главное меню' || text === '🏠 Main Menu') {
+  if (text === '/start' || text === '/home' || text === '/cancel') {
+    if (text === '/start') {
+      user.language = null; // force language selection
+      await env.DB.prepare('UPDATE telegram_users SET language = NULL WHERE chat_id = ?').bind(chatId).run();
+    }
     await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('IDLE', null, now, chatId).run();
     await sendHomeMenu(env, chatId, user);
     return new Response('OK');
   }
 
-  if (text === '/track') {
-    await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('WAITING_LINK', null, now, chatId).run();
-    await callTelegramApi(env, 'sendMessage', { chat_id: chatId, text: t(lang, 'add_prompt'), parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_home'), callback_data: "home" }]] } });
-    return new Response('OK');
-  }
-
-  if (text === '/list') {
-    update.callback_query = { message: update.message, data: 'my_colls', id: 'fake' };
-    return handleTelegramWebhook({ method: 'POST', json: () => Promise.resolve(update) }, env);
-  }
+  const handledSolText = await handleSolanaText(text, chatId, user, env);
+  if (handledSolText) return new Response('OK');
+  const lang = user.language || 'ru';
 
   if (user.state === 'WAITING_LINK') {
-    let slug = text;
     try {
-      if (text.includes('opensea.io/collection/')) {
-        const url = new URL(text);
-        slug = url.pathname.split('collection/')[1].split('/')[0];
-      }
-    } catch(e) {
-      await callTelegramApi(env, 'sendMessage', { chat_id: chatId, text: t(lang, 'collection_not_found'), parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_try_again'), callback_data: "track_add" }, { text: t(lang, 'btn_home'), callback_data: "home" }]] } });
-      return new Response('OK');
-    }
-
-    try {
-      const apiKey = await getOpenSeaApiKey(env);
-      const data = await fetchOpenSeaJson(`/collections/${slug}`, apiKey);
-      const statsData = await fetchOpenSeaJson(`/collections/${slug}/stats`, apiKey);
+      let slug = text.trim();
+      if (slug.includes('opensea.io/collection/')) slug = slug.split('opensea.io/collection/')[1].split('/')[0].split('?')[0];
       
-      const name = data.name || slug;
-      const floor = statsData.total?.floor_price || 0;
-      const volume = (statsData.total?.volume || 0).toFixed(2);
+      const apiKey = await getOpenSeaApiKey(env);
+      const collectionRes = await fetchOpenSeaJson(`/collections/${slug}`, apiKey);
+      
+      if (!collectionRes.collection) throw new Error("Not found");
+      const name = collectionRes.collection.name;
+      
+      const statsRes = await fetchOpenSeaJson(`/collections/${slug}/stats`, apiKey);
+      const floor = statsRes.total.floor_price;
+      const volume = statsRes.total.volume.toFixed(2);
       
       const stateData = JSON.stringify({ slug, name, floor });
-      await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('IDLE', stateData, now, chatId).run(); // Change to IDLE because next step is button click
+      await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('IDLE', stateData, now, chatId).run();
       
       await callTelegramApi(env, 'sendMessage', {
         chat_id: chatId,
         text: t(lang, 'collection_found', { name, floor, change24h: '0', volume }),
         parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_create_alert'), callback_data: `setup_alert:${slug}` }], [{ text: t(lang, 'btn_cancel'), callback_data: "home" }]] }
+        reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_create_alert'), callback_data: `setup_alert:${slug}` }], [{ text: t(lang, 'btn_cancel'), callback_data: "nft_home" }]] }
       });
     } catch (e) {
       await callTelegramApi(env, 'sendMessage', { chat_id: chatId, text: t(lang, 'collection_not_found'), parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_try_again'), callback_data: "track_add" }, { text: t(lang, 'btn_home'), callback_data: "home" }]] } });
@@ -431,21 +384,13 @@ const lang = user.language || 'ru';
     const val = parseFloat(text.replace('%', '').replace(/eth/i, '').replace(',', '.').trim());
     
     if (isNaN(val) || val <= 0) {
-      let mId = update.callback_query ? update.callback_query.message.message_id : null;
-      let method = mId ? 'editMessageText' : 'sendMessage';
-      await callTelegramApi(env, method, {
-        chat_id: chatId, message_id: mId,
-        text: t(lang, 'invalid_number'), parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_home'), callback_data: "home" }]] }
-      });
+      await callTelegramApi(env, 'sendMessage', { chat_id: chatId, text: t(lang, 'invalid_number'), parse_mode: 'HTML', reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_home'), callback_data: "home" }]] } });
       return new Response('OK');
     }
 
     const type = isPercent ? 'percent' : 'abs';
     const percentVal = isPercent ? val : 0;
     const absVal = isPercent ? 0 : val;
-    let mId = update.callback_query ? update.callback_query.message.message_id : null;
-    let method = mId ? 'editMessageText' : 'sendMessage';
 
     if (user.state === 'WAITING_THRESHOLD') {
       try {
@@ -461,11 +406,11 @@ const lang = user.language || 'ru';
         const alertObj = { threshold_type: type, threshold_abs: absVal, threshold_percent: percentVal };
         const bounds = calculateBounds(data.floor, alertObj);
         
-        await callTelegramApi(env, method, {
-          chat_id: chatId, message_id: mId,
+        await callTelegramApi(env, 'sendMessage', {
+          chat_id: chatId,
           text: t(lang, 'alert_created', { name: data.name, floor: data.floor, threshold: thrText, upper: bounds.upper, lower: bounds.lower }),
           parse_mode: 'HTML',
-          reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_my_collections'), callback_data: "my_colls" }, { text: t(lang, 'btn_home'), callback_data: "home" }]] }
+          reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_my_collections'), callback_data: "my_colls" }, { text: t(lang, 'btn_home'), callback_data: "nft_home" }]] }
         });
       } catch (e) {
         await env.DB.prepare('UPDATE telegram_users SET state = ?, updated_at = ? WHERE chat_id = ?').bind('IDLE', now, chatId).run();
@@ -484,11 +429,11 @@ const lang = user.language || 'ru';
       const alertObj = { threshold_type: type, threshold_abs: absVal, threshold_percent: percentVal };
       const bounds = calculateBounds(data.floor, alertObj);
 
-      await callTelegramApi(env, method, {
-        chat_id: chatId, message_id: mId,
+      await callTelegramApi(env, 'sendMessage', {
+        chat_id: chatId,
         text: t(lang, 'alert_changed', { name: data.name, floor: data.floor, threshold: thrText, upper: bounds.upper, lower: bounds.lower }),
         parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_back'), callback_data: `view_coll:${id}` }, { text: t(lang, 'btn_home'), callback_data: "home" }]] }
+        reply_markup: { inline_keyboard: [[{ text: t(lang, 'btn_back'), callback_data: `view_coll:${id}` }, { text: t(lang, 'btn_home'), callback_data: "nft_home" }]] }
       });
     }
 
@@ -571,7 +516,7 @@ export async function checkPriceAlerts(env) {
       
       await callTelegramApi(env, 'sendMessage', {
         chat_id: alert.chat_id, text: msg, parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: "📊 Мониторинг / Monitoring", callback_data: `view_coll:${alert.id}` }]] }
+        reply_markup: { inline_keyboard: [[{ text: "👀 Открыть / Monitoring", callback_data: `view_coll:${alert.id}` }]] }
       });
       
       await env.DB.prepare('UPDATE price_alerts SET baseline_price = ?, updated_at = ? WHERE id = ?').bind(currentFloor, now, alert.id).run();
