@@ -658,7 +658,7 @@ router.post('/evm/webhook', async (request, env) => {
             else if (msg.network === 'Base') netIcon = '🔵';
             else if (msg.network === 'Arbitrum') netIcon = '🔵';
             else if (msg.network === 'Optimism') netIcon = '🔴';
-            else if (msg.network === 'Ethereum') netIcon = '🔵';
+            else if (msg.network === 'Ethereum' || msg.network === 'ETH') netIcon = '<tg-emoji emoji-id="5400219289301054663">🌐</tg-emoji>';
             
             let formatted = `<a href="https://etherscan.io/address/${w.address}"><b>${w.name}</b></a> · ${netIcon} <b>${msg.network.toUpperCase()}</b>
 `;
