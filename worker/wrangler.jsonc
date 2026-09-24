@@ -22,5 +22,8 @@
   ],
   "ai": {
     "binding": "AI"
+  },
+  "vars": {
+    "HELIUS_API_KEY": "df35408d-8969-4d22-bb67-cc686c6353b5"
   }
 }

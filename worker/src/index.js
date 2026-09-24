@@ -22,7 +22,7 @@ import {
 } from './opensea.js';
 import { runAIFilter } from './ai-classifier.js';
 
-import { handleTelegramWebhook, checkPriceAlerts } from './telegram-bot.js';
+import { handleTelegramWebhook, checkPriceAlerts } from './telegram-grammy.js';
 
 const router = Router();
 

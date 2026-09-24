@@ -8,6 +8,7 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
+    "grammy": "^1.46.0",
     "itty-router": "^4.0.0"
   },
   "devDependencies": {
