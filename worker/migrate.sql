@@ -176,3 +176,6 @@ CREATE TABLE IF NOT EXISTS app_state (
   key TEXT PRIMARY KEY,
   value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS evm_wallets (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id TEXT, address TEXT, name TEXT, created_at TEXT);
+CREATE TABLE IF NOT EXISTS evm_filters (wallet_id INTEGER PRIMARY KEY, notify_swap INTEGER DEFAULT 1, notify_transfer INTEGER DEFAULT 1, notify_nft INTEGER DEFAULT 1, notify_mint INTEGER DEFAULT 1);

@@ -24,6 +24,7 @@
     "binding": "AI"
   },
   "vars": {
-    "HELIUS_API_KEY": "df35408d-8969-4d22-bb67-cc686c6353b5"
+    "HELIUS_API_KEY": "df35408d-8969-4d22-bb67-cc686c6353b5",
+    "ALCHEMY_AUTH_TOKEN": "PP6k6i0EU1Yad7BTxn3xWZY-JoYLb_6K"
   }
 }
