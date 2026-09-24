@@ -88,7 +88,8 @@ CREATE TABLE IF NOT EXISTS opensea_drops (
   sent_to_telegram INTEGER DEFAULT 0,
   telegram_message_id TEXT,
   detected_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT,
+  is_active INTEGER DEFAULT 1 NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_opensea_drops_score ON opensea_drops(score);
@@ -118,6 +119,7 @@ CREATE TABLE IF NOT EXISTS telegram_users (
   chat_id TEXT PRIMARY KEY,
   state TEXT,
   state_data TEXT,
+  language TEXT DEFAULT 'ru',
   updated_at TEXT NOT NULL
 );
 
@@ -133,4 +135,15 @@ CREATE TABLE IF NOT EXISTS price_alerts (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   UNIQUE(chat_id, collection_slug)
+);
+
+
+CREATE TABLE IF NOT EXISTS alert_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  alert_id INTEGER,
+  direction TEXT,
+  percent_change REAL,
+  old_price REAL,
+  new_price REAL,
+  created_at TEXT
 );
