@@ -480,10 +480,14 @@ export async function handleTelegramWebhook(request, env) {
   });
 
   // TEXT HANDLER
-  const handleText = async (ctx) => {
+    const handleText = async (ctx) => {
+    const text = ctx.message.text.trim();
+    const chatId = ctx.chat.id.toString();
+    const state = ctx.user.state;
+    const now = new Date().toISOString();
 
     if (state === 'WAITING_EVM_ADDRESS') {
-      if (!/^0x[a-fA-F0-9]{40}$/.test(text)) return await ctx.reply("❌ Некорректный адрес. Попробуйте еще раз.");
+      if (!/^0x[a-fA-F0-9]{40}$/i.test(text)) return await ctx.reply("❌ Некорректный адрес. Попробуйте еще раз.");
       const kb = new InlineKeyboard().text("✅ Добавить", `evm_confirm:${text}`).text("❌ Отмена", "evm_home");
       return await ctx.reply(`🔎 <b>Кошелёк корректен</b>\n\n⟠ EVM\n<code>${text}</code>\n\nДобавить этот кошелёк в мониторинг?`, { parse_mode: 'HTML', reply_markup: kb });
     }
@@ -500,11 +504,6 @@ export async function handleTelegramWebhook(request, env) {
       await setState(ctx, 'IDLE');
       return await ctx.reply("✅ <b>Кошелёк добавлен!</b>", { parse_mode: 'HTML', reply_markup: new InlineKeyboard().text("⟠ Открыть EVM Tracker", "evm_home") });
     }
-
-    const text = ctx.message.text.trim();
-    const chatId = ctx.chat.id.toString();
-    const state = ctx.user.state;
-    const now = new Date().toISOString();
 
     if (state === 'WAITING_SOL_ADDRESS') {
       if (text.length < 32) return await ctx.reply("❌ Некорректный адрес. Попробуйте еще раз.");
@@ -565,7 +564,7 @@ export async function handleTelegramWebhook(request, env) {
         await ctx.env.DB.prepare(`UPDATE price_alerts SET threshold_type = ?, threshold_abs = ?, threshold_percent = ?, updated_at = ? WHERE id = ? AND chat_id = ?`).bind(type, absVal, percentVal, now, data.edit_id, chatId).run();
         await setState(ctx, 'IDLE');
         const bounds = calculateBounds(data.floor, { threshold_type: type, threshold_abs: absVal, threshold_percent: percentVal });
-        const kb = new InlineKeyboard().text("◀️ Назад", `view_coll:${data.edit_id}`).text(t(ctx.lang, 'btn_home'), "nft_home");
+        const kb = new InlineKeyboard().text("👀 К алерту", `view_coll:${data.edit_id}`).text(t(ctx.lang, 'btn_home'), "nft_home");
         return await ctx.reply(t(ctx.lang, 'alert_changed', { name: data.name, floor: data.floor, threshold: isPercent?`${val}%`:`${val} ETH`, upper: bounds.upper, lower: bounds.lower }), { parse_mode: 'HTML', reply_markup: kb });
       }
     }
