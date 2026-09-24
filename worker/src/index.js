@@ -653,7 +653,12 @@ router.post('/evm/webhook', async (request, env) => {
             const shorten = (a) => a ? `${a.slice(0, 4)}..${a.slice(-4)}` : 'Unknown';
             const counterparty = isReceived ? shorten(fromAddr) : shorten(toAddr);
             
-            const netIcon = msg.network === 'Base' ? '🔵' : msg.network === 'Polygon' ? '🟣' : msg.network === 'Arbitrum' ? '🔵' : msg.network === 'Optimism' ? '🔴' : '🔗';
+            let netIcon = '🔗';
+            if (msg.network === 'Polygon') netIcon = '<tg-emoji emoji-id="5397954355477377973">🟣</tg-emoji>';
+            else if (msg.network === 'Base') netIcon = '🔵';
+            else if (msg.network === 'Arbitrum') netIcon = '🔵';
+            else if (msg.network === 'Optimism') netIcon = '🔴';
+            else if (msg.network === 'Ethereum') netIcon = '🔵';
             
             let formatted = `<a href="https://etherscan.io/address/${w.address}"><b>${w.name}</b></a> · ${netIcon} <b>${msg.network.toUpperCase()}</b>
 `;
