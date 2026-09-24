@@ -196,9 +196,26 @@ export async function handleTelegramWebhook(request, env) {
     await env.DB.prepare('INSERT INTO telegram_users (chat_id, state, updated_at) VALUES (?, ?, ?)').bind(chatId, 'IDLE', now).run();
   }
 
-  if (text === '/start' || text === '/home' || text === '/cancel') {
+  if (text === '/start' || text === '/home' || text === '/cancel' || text === '🏠 Главное меню') {
     await env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind('IDLE', null, now, chatId).run();
-    await sendHomeMenu(env, chatId);
+    
+    // Always ensure the persistent bottom keyboard is present when returning to home
+    await callTelegramApi(env, 'sendMessage', {
+      chat_id: chatId,
+      text: "Открываю главное меню...",
+      reply_markup: {
+        keyboard: [[{ text: "🏠 Главное меню" }]],
+        resize_keyboard: true,
+        is_persistent: true
+      }
+    }).then(res => res.json()).then(async data => {
+      // Then send the actual inline menu
+      await sendHomeMenu(env, chatId);
+      // We can optionally delete the "Открываю главное меню..." message to keep it clean
+      if (data.result && data.result.message_id) {
+        await callTelegramApi(env, 'deleteMessage', { chat_id: chatId, message_id: data.result.message_id }).catch(() => {});
+      }
+    });
     return new Response('OK');
   }
 

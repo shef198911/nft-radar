@@ -32,9 +32,26 @@ router.post('/telegram/webhook', async (request, env) => {
 
 router.get('/telegram/setup', async (request, env) => {
   if (!isAuthorized(request, env)) return new Response('Unauthorized', { status: 401 });
-  const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setWebhook?url=https://nft-radar.icoshef.workers.dev/telegram/webhook`;
-  const res = await fetch(url).then(r => r.json());
-  return new Response(JSON.stringify(res), { headers: { 'Content-Type': 'application/json' } });
+  
+  // Set webhook
+  const hookUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setWebhook?url=https://nft-radar.icoshef.workers.dev/telegram/webhook`;
+  const hookRes = await fetch(hookUrl).then(r => r.json());
+  
+  // Set standard menu commands
+  const cmdUrl = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setMyCommands`;
+  const cmdRes = await fetch(cmdUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      commands: [
+        { command: 'start', description: '🏠 Главное меню' },
+        { command: 'track', description: '➕ Добавить коллекцию' },
+        { command: 'list', description: '📋 Мои подписки' }
+      ]
+    })
+  }).then(r => r.json());
+
+  return new Response(JSON.stringify({ webhook: hookRes, commands: cmdRes }), { headers: { 'Content-Type': 'application/json' } });
 });
 
 function getClientKey(request) {
