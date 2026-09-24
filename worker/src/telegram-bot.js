@@ -58,14 +58,18 @@ async function sendHomeMenu(env, chatId, user, messageIdToEdit = null) {
     lastCheck = new Date(alert.updated_at).toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' });
   }
 
-  const text = t(lang, 'main_menu', { tracked, active, time: lastCheck });
+  const { results: solRes } = await env.DB.prepare('SELECT id FROM solana_wallets WHERE chat_id = ?').bind(chatId).all();
+  const solTracked = solRes ? solRes.length : 0;
+
+  const text = `🤖 <b>Crypto Tracker</b>\n\nNFT-коллекции: ${tracked}\nSolana-кошельки: ${solTracked}\n\nАктивных NFT-алертов: ${active}\n\n────────────────\n\n🖼 <b>NFT</b>`;
   const reply_markup = {
     inline_keyboard: [
-      [{ text: t(lang, 'btn_add_collection'), callback_data: "track_add" }],
-      [{ text: t(lang, 'btn_my_collections'), callback_data: "my_colls" }],
-      [{ text: t(lang, 'btn_active_alerts'), callback_data: "active_alerts" }],
-      [{ text: t(lang, 'btn_settings'), callback_data: "settings" }],
-      [{ text: t(lang, 'btn_how_it_works'), callback_data: "how_it_works" }]
+      [{ text: "📊 NFT коллекции", callback_data: "my_colls" }, { text: "➕ Добавить NFT", callback_data: "track_add" }],
+      [{ text: "────────────────", callback_data: "none" }],
+      [{ text: "👛 Wallet Tracker", callback_data: "none" }],
+      [{ text: "🟣 Solana", callback_data: "solana_home" }, { text: "⟨ EVM — SOON ⟩", callback_data: "none" }],
+      [{ text: "────────────────", callback_data: "none" }],
+      [{ text: "⚙️ Настройки", callback_data: "settings" }, { text: "📖 Как это работает", callback_data: "how_it_works" }]
     ]
   };
 
@@ -85,20 +89,6 @@ async function sendHomeMenu(env, chatId, user, messageIdToEdit = null) {
       }
     });
   }
-}
-
-
-async function sendSolanaHome(env, chatId, user, messageId) {
-  const { results } = await env.DB.prepare('SELECT id FROM solana_wallets WHERE chat_id = ?').bind(chatId).all();
-  const count = results ? results.length : 0;
-  const text = "🟣 <b>Solana Wallet Tracker</b>\n\nОтслеживается:\n" + count + " кошелька(ов)\n\nАктивных уведомлений:\n" + count;
-  const kb = [
-    [{ text: "👛 Мои кошельки", callback_data: "solana_list" }],
-    [{ text: "➕ Добавить кошелёк", callback_data: "solana_add" }],
-    [{ text: "🔔 Уведомления", callback_data: "solana_filters_main" }],
-    [{ text: "◀️ Главное меню", callback_data: "home" }]
-  ];
-  await callTelegramApi(env, 'editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', reply_markup: { inline_keyboard: kb } });
 }
 
 export async function handleTelegramWebhook(request, env) {
@@ -131,13 +121,11 @@ export async function handleTelegramWebhook(request, env) {
       return new Response('OK');
     }
 
-    const lang = user.language || 'ru';
+const lang = user.language || 'ru';
 
-    
     const handled = await handleSolanaCallback(data, chatId, messageId, env, update);
     if (handled) return new Response('OK');
     if (!handled && (data === 'solana_home' || data.startsWith('sol_del:') || data.startsWith('sol_t_f:'))) {
-        // Recurse to handle updated data
         return handleTelegramWebhook({ method: 'POST', json: () => Promise.resolve(update) }, env);
     }
 
@@ -380,9 +368,8 @@ export async function handleTelegramWebhook(request, env) {
     await env.DB.prepare('INSERT INTO telegram_users (chat_id, state, updated_at) VALUES (?, ?, ?)').bind(chatId, 'IDLE', now).run();
   }
 
-  const lang = user.language || 'ru';
+const lang = user.language || 'ru';
 
-  
   const handledText = await handleSolanaText(text, chatId, user, env);
   if (handledText) return new Response('OK');
 
