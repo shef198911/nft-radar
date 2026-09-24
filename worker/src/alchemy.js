@@ -4,7 +4,7 @@ const NETWORKS = [
   'ETH_MAINNET',
   'ARB_MAINNET',
   'OPT_MAINNET',
-  'POLYGON_MAINNET',
+  'MATIC_MAINNET',
   'BASE_MAINNET'
 ];
 
@@ -91,7 +91,7 @@ export function parseAlchemyWebhook(body) {
     'ETH_MAINNET': 'Ethereum',
     'ARB_MAINNET': 'Arbitrum',
     'OPT_MAINNET': 'Optimism',
-    'POLYGON_MAINNET': 'Polygon',
+    'MATIC_MAINNET': 'Polygon',
     'BASE_MAINNET': 'Base'
   };
   const chainName = chainNames[network] || network;
@@ -101,7 +101,7 @@ export function parseAlchemyWebhook(body) {
       case 'ETH_MAINNET': return `https://etherscan.io/tx/${hash}`;
       case 'ARB_MAINNET': return `https://arbiscan.io/tx/${hash}`;
       case 'OPT_MAINNET': return `https://optimistic.etherscan.io/tx/${hash}`;
-      case 'POLYGON_MAINNET': return `https://polygonscan.com/tx/${hash}`;
+      case 'MATIC_MAINNET': return `https://polygonscan.com/tx/${hash}`;
       case 'BASE_MAINNET': return `https://basescan.org/tx/${hash}`;
       default: return `https://etherscan.io/tx/${hash}`;
     }
