@@ -2,6 +2,7 @@ import { Bot, InlineKeyboard, webhookCallback } from "grammy";
 import { fetchOpenSeaJson, getOpenSeaApiKey } from './opensea.js';
 import { getWalletBalance, updateWebhook } from './helius.js';
 import { t } from './i18n.js';
+import { initAlchemyWebhooks, updateAlchemyAddresses } from './alchemy.js';
 
 export async function checkPriceAlerts(env) {
   const { results: alerts } = await env.DB.prepare('SELECT * FROM price_alerts WHERE is_active = 1').all();
@@ -221,9 +222,8 @@ export async function handleTelegramWebhook(request, env) {
     await ctx.env.DB.prepare('INSERT INTO evm_filters (wallet_id) VALUES (?)').bind(meta.last_row_id).run();
     
     // Process alchemy webhook
-    const { initAlchemyWebhooks, updateAlchemyAddresses } = await import('./alchemy.js');
-    await initAlchemyWebhooks(ctx.env);
-    ctx.waitUntil(updateAlchemyAddresses(ctx.env, [addr]));
+        await initAlchemyWebhooks(ctx.env);
+    await updateAlchemyAddresses(ctx.env, [addr]);
 
     await setState(ctx, 'IDLE');
     return bot.handleUpdate({ ...ctx.update, callback_query: { ...ctx.callbackQuery, data: `evm_home` } });
@@ -497,9 +497,8 @@ export async function handleTelegramWebhook(request, env) {
       const { meta } = await ctx.env.DB.prepare('INSERT INTO evm_wallets (chat_id, address, name, created_at) VALUES (?, ?, ?, ?)').bind(chatId, data.addr, text, now).run();
       await ctx.env.DB.prepare('INSERT INTO evm_filters (wallet_id) VALUES (?)').bind(meta.last_row_id).run();
       
-      const { initAlchemyWebhooks, updateAlchemyAddresses } = await import('./alchemy.js');
-      await initAlchemyWebhooks(ctx.env);
-      ctx.waitUntil(updateAlchemyAddresses(ctx.env, [data.addr]));
+            await initAlchemyWebhooks(ctx.env);
+      await updateAlchemyAddresses(ctx.env, [data.addr]);
 
       await setState(ctx, 'IDLE');
       return await ctx.reply("✅ <b>Кошелёк добавлен!</b>", { parse_mode: 'HTML', reply_markup: new InlineKeyboard().text("⟠ Открыть EVM Tracker", "evm_home") });
