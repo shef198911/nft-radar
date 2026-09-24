@@ -8,6 +8,26 @@ export async function checkPriceAlerts(env) {
   if (!alerts || alerts.length === 0) return;
 
   const now = new Date().toISOString();
+    
+    if (state === 'WAITING_EVM_ADDRESS') {
+      if (!/^0x[a-fA-F0-9]{40}$/i.test(text)) return await ctx.reply("❌ Некорректный адрес. Попробуйте еще раз.");
+      const kb = new InlineKeyboard().text("✅ Добавить", `evm_confirm:${text}`).text("❌ Отмена", "evm_home");
+      return await ctx.reply(`🔎 <b>Кошелёк корректен</b>\n\n⟠ EVM\n<code>${text}</code>\n\nДобавить этот кошелёк в мониторинг?`, { parse_mode: 'HTML', reply_markup: kb });
+    }
+
+    if (state === 'WAITING_EVM_NAME') {
+      const data = JSON.parse(ctx.user.state_data);
+      const { meta } = await ctx.env.DB.prepare('INSERT INTO evm_wallets (chat_id, address, name, created_at) VALUES (?, ?, ?, ?)').bind(chatId, data.addr, text, now).run();
+      await ctx.env.DB.prepare('INSERT INTO evm_filters (wallet_id) VALUES (?)').bind(meta.last_row_id).run();
+      
+      const { initAlchemyWebhooks, updateAlchemyAddresses } = await import('./alchemy.js');
+      await initAlchemyWebhooks(ctx.env);
+      ctx.waitUntil(updateAlchemyAddresses(ctx.env, [data.addr]));
+
+      await setState(ctx, 'IDLE');
+      return await ctx.reply("✅ <b>Кошелёк добавлен!</b>", { parse_mode: 'HTML', reply_markup: new InlineKeyboard().text("⟠ Открыть EVM Tracker", "evm_home") });
+    }
+
   let apiKey;
   try {
     apiKey = await getOpenSeaApiKey(env);
@@ -481,25 +501,6 @@ export async function handleTelegramWebhook(request, env) {
 
   // TEXT HANDLER
   const handleText = async (ctx) => {
-
-    if (state === 'WAITING_EVM_ADDRESS') {
-      if (!/^0x[a-fA-F0-9]{40}$/.test(text)) return await ctx.reply("❌ Некорректный адрес. Попробуйте еще раз.");
-      const kb = new InlineKeyboard().text("✅ Добавить", `evm_confirm:${text}`).text("❌ Отмена", "evm_home");
-      return await ctx.reply(`🔎 <b>Кошелёк корректен</b>\n\n⟠ EVM\n<code>${text}</code>\n\nДобавить этот кошелёк в мониторинг?`, { parse_mode: 'HTML', reply_markup: kb });
-    }
-
-    if (state === 'WAITING_EVM_NAME') {
-      const data = JSON.parse(ctx.user.state_data);
-      const { meta } = await ctx.env.DB.prepare('INSERT INTO evm_wallets (chat_id, address, name, created_at) VALUES (?, ?, ?, ?)').bind(chatId, data.addr, text, now).run();
-      await ctx.env.DB.prepare('INSERT INTO evm_filters (wallet_id) VALUES (?)').bind(meta.last_row_id).run();
-      
-      const { initAlchemyWebhooks, updateAlchemyAddresses } = await import('./alchemy.js');
-      await initAlchemyWebhooks(ctx.env);
-      ctx.waitUntil(updateAlchemyAddresses(ctx.env, [data.addr]));
-
-      await setState(ctx, 'IDLE');
-      return await ctx.reply("✅ <b>Кошелёк добавлен!</b>", { parse_mode: 'HTML', reply_markup: new InlineKeyboard().text("⟠ Открыть EVM Tracker", "evm_home") });
-    }
 
     const text = ctx.message.text.trim();
     const chatId = ctx.chat.id.toString();
