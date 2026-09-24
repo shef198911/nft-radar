@@ -122,6 +122,8 @@ export function parseAlchemyWebhook(body) {
     const asset = tx.asset; 
     const explorerUrl = getExplorer(network, hash);
 
+    if (val === 0 || val === '0' || val === 0.0) continue;
+
     if (isExternal || isInternal || isToken) {
       messages.push({ category: 'transfer', network: chainName, asset: asset || 'ETH', value: val, hash, from, to, explorerUrl });
     } else if (isERC721) {
