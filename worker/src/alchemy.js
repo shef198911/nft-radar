@@ -111,6 +111,7 @@ export function parseAlchemyWebhook(body) {
   };
   const chainName = chainNames[network] || network;
 
+  
   const getExplorer = (net, hash) => {
     switch(net) {
       case 'ETH_MAINNET': return `https://etherscan.io/tx/${hash}`;
@@ -128,7 +129,24 @@ export function parseAlchemyWebhook(body) {
     }
   };
 
-  let messages = [];
+  const getTokenUrl = (net, contractAddress) => {
+    if (!contractAddress) return null;
+    switch(net) {
+      case 'ETH_MAINNET': return `https://etherscan.io/token/${contractAddress}`;
+      case 'ARB_MAINNET': return `https://arbiscan.io/token/${contractAddress}`;
+      case 'OPT_MAINNET': return `https://optimistic.etherscan.io/token/${contractAddress}`;
+      case 'MATIC_MAINNET': return `https://polygonscan.com/token/${contractAddress}`;
+      case 'BASE_MAINNET': return `https://basescan.org/token/${contractAddress}`;
+      case 'BNB_MAINNET': return `https://bscscan.com/token/${contractAddress}`;
+      case 'AVAX_MAINNET': return `https://snowtrace.io/token/${contractAddress}`;
+      case 'LINEA_MAINNET': return `https://lineascan.build/token/${contractAddress}`;
+      case 'ZKSYNC_MAINNET': return `https://explorer.zksync.io/token/${contractAddress}`;
+      case 'ROBINHOOD_MAINNET': return `https://explorer.robinhood.com/token/${contractAddress}`;
+      case 'SCROLL_MAINNET': return `https://scrollscan.com/token/${contractAddress}`;
+      default: return `https://etherscan.io/token/${contractAddress}`;
+    }
+  };
+let messages = [];
 
   for (const tx of body.event.activity) {
     const isToken = tx.category === 'token' || tx.category === 'erc20';
@@ -145,10 +163,13 @@ export function parseAlchemyWebhook(body) {
 
     if (val === 0 || val === '0' || val === 0.0) continue;
 
+    const contractAddress = tx.rawContract ? tx.rawContract.address : null;
+    const tokenUrl = getTokenUrl(network, contractAddress);
+
     if (isExternal || isInternal || isToken) {
-      messages.push({ category: 'transfer', network: chainName, asset: asset || 'ETH', value: val, hash, from, to, explorerUrl });
+      messages.push({ category: 'transfer', network: chainName, asset: asset || 'ETH', value: val, hash, from, to, explorerUrl, tokenUrl });
     } else if (isERC721) {
-      messages.push({ category: 'nft', network: chainName, asset: 'NFT', tokenId: tx.erc721TokenId || 'Unknown', hash, from, to, explorerUrl });
+      messages.push({ category: 'nft', network: chainName, asset: 'NFT', tokenId: tx.erc721TokenId || 'Unknown', hash, from, to, explorerUrl, tokenUrl });
     }
   }
 

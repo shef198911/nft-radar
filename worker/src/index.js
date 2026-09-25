@@ -733,7 +733,7 @@ const formatCrypto = (v) => {
           for (const msg of myMsgs) {
             const isReceived = msg.to && msg.to.toLowerCase() === myAddr;
             if (msg.category === 'transfer') {
-              formatted += `${isReceived ? '📥 Получено:' : '📤 Отправлено:'} ${formatCrypto(msg.value)} ${msg.asset}\n`;
+              formatted += `${isReceived ? '📥 Получено:' : '📤 Отправлено:'} ${formatCrypto(msg.value)} ${msg.tokenUrl ? `<a href="${msg.tokenUrl}">${msg.asset}</a>` : msg.asset}\n`;
             } else {
               formatted += `${isReceived ? '🖼 Получен' : '🖼 Отправлен'} NFT ID ${msg.tokenId}\n`;
             }
@@ -745,7 +745,7 @@ const formatCrypto = (v) => {
           
           if (msg.category === 'transfer') {
             const icon = isReceived ? '🤑' : '💸';
-            formatted += `\n${icon} ${isReceived ? 'Получено:' : 'Отправлено:'} ${formatCrypto(msg.value)} ${msg.asset} ${isReceived ? '📥 От:' : '📤 На:'} ${counterparty}\n`;
+            formatted += `\n${icon} ${isReceived ? 'Получено:' : 'Отправлено:'} ${formatCrypto(msg.value)} ${msg.tokenUrl ? `<a href="${msg.tokenUrl}">${msg.asset}</a>` : msg.asset} ${isReceived ? '📥 От:' : '📤 На:'} ${counterparty}\n`;
           } else {
             formatted += `\n🖼 ${isReceived ? 'Получен NFT:' : 'Отправлен NFT:'} ID ${msg.tokenId} ${isReceived ? '📥 От:' : '📤 На:'} ${counterparty}\n`;
           }
