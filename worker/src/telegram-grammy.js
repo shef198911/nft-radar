@@ -132,8 +132,8 @@ export async function handleTelegramWebhook(request, env) {
       .text("🖼 NFT Tracker", "nft_home").text("👛 Wallet Tracker", "wallet_home").row()
       .text("⚙️ Настройки", "settings").text("📖 Как это работает", "how_it_works");
     const text = `🤖 <b>Crypto Tracker</b>\n\nДобро пожаловать в мультитул.\nВыберите нужный раздел:`;
-    if (ctx.callbackQuery) await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
-    else await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb });
+    if (ctx.callbackQuery) await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
+    else await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
   };
 
   bot.command(["start", "home", "cancel"], async (ctx) => {
@@ -169,20 +169,20 @@ export async function handleTelegramWebhook(request, env) {
     
     const text = `🖼 <b>NFT Tracker</b>\n\nОтслеживается коллекций: ${tracked}\nАктивных алертов: ${active}\nПоследняя проверка: ${lastCheck}`;
     const kb = new InlineKeyboard().text("📊 Мои коллекции", "my_colls").text("➕ Добавить коллекцию", "track_add").row().text("◀️ Главное меню", "home");
-    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
   bot.callbackQuery("wallet_home", async (ctx) => {
     const text = `👛 <b>Wallet Tracker</b>\n\nВыберите блокчейн:\nㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤ`;
     const kb = new InlineKeyboard().text("◎ Solana", "solana_home").text("⟠ EVM", "evm_home").row().text("◀️ Главное меню", "home");
-    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
   bot.callbackQuery("settings", async (ctx) => {
     const kb = new InlineKeyboard().text(t(ctx.lang, 'btn_lang'), "settings_lang").row().text("◀️ Главное меню", "home");
-    await ctx.editMessageText("⚙️ <b>Настройки</b>", { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText("⚙️ <b>Настройки</b>", { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
   bot.callbackQuery("settings_lang", async (ctx) => { await sendLangMenu(ctx); await ctx.answerCallbackQuery(); });
@@ -199,7 +199,7 @@ export async function handleTelegramWebhook(request, env) {
     const count = results ? results.length : 0;
     const text = `⟠ <b>EVM Wallet Tracker</b>\n\nОтслеживается:\n${count} кошелька(ов)\n\nАктивных уведомлений:\n${count}\nㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤ`;
     const kb = new InlineKeyboard().text("👛 Мои кошельки", "evm_list").row().text("➕ Добавить кошелёк", "evm_add").row().text("◀️ Wallet Tracker", "wallet_home");
-    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
@@ -235,7 +235,7 @@ export async function handleTelegramWebhook(request, env) {
     const kb = new InlineKeyboard();
     if (results) results.forEach(w => kb.text(`🟢 ${w.name}`, `view_evm:${w.id}`).row());
     kb.text("➕ Добавить кошелёк", "evm_add").row().text("◀️ EVM", "evm_home");
-    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
@@ -244,7 +244,7 @@ export async function handleTelegramWebhook(request, env) {
     const w = await ctx.env.DB.prepare('SELECT * FROM evm_wallets WHERE id = ? AND chat_id = ?').bind(id, ctx.chat.id.toString()).first();
     if (!w) return await ctx.answerCallbackQuery();
     const kb = new InlineKeyboard().text("🔔 События", `evm_filters:${id}`).row().url("🔗 Открыть кошелёк", `https://etherscan.io/address/${w.address}`).row().text("🗑 Удалить", `evm_del:${id}`).row().text("◀️ EVM Wallets", "evm_list");
-    await ctx.editMessageText(`⟠ EVM\n\n👛 <b>${w.name}</b>\n<code>${w.address}</code>`, { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText(`⟠ EVM\n\n👛 <b>${w.name}</b>\n<code>${w.address}</code>`, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
@@ -264,7 +264,7 @@ export async function handleTelegramWebhook(request, env) {
       .text(`Transfers ${filters.notify_transfer ? '🟢 ON' : '🔴 OFF'}`, `evm_t_f:${id}:transfer`).row()
       .text(`NFT ${filters.notify_nft ? '🟢 ON' : '🔴 OFF'}`, `evm_t_f:${id}:nft`).row()
       .text("◀️ Кошелёк", `view_evm:${id}`);
-    await ctx.editMessageText("🔔 <b>События</b>\n\nВыберите уведомления:", { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText("🔔 <b>События</b>\n\nВыберите уведомления:", { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
@@ -286,7 +286,7 @@ export async function handleTelegramWebhook(request, env) {
       for (const r of results) kb.text(`${r.is_active ? '🟢' : '🔴'} ${r.collection_name}`, `view_coll:${r.id}`).row();
     }
     kb.text("◀️ NFT Tracker", "nft_home");
-    await ctx.editMessageText(msgText, { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText(msgText, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
@@ -305,7 +305,7 @@ export async function handleTelegramWebhook(request, env) {
       .text("0.01 ETH", "set_thr:0.01eth").text("0.05 ETH", "set_thr:0.05eth").row()
       .text(t(ctx.lang, 'btn_custom_threshold'), "set_thr_custom").row()
       .text(t(ctx.lang, 'btn_cancel'), "nft_home");
-    await ctx.editMessageText(t(ctx.lang, 'ask_threshold'), { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText(t(ctx.lang, 'ask_threshold'), { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
@@ -339,7 +339,7 @@ export async function handleTelegramWebhook(request, env) {
       .text(alert.is_active ? t(ctx.lang, 'btn_pause') : t(ctx.lang, 'btn_resume'), `do_del:${id}:pause`).row()
       .text(t(ctx.lang, 'btn_delete'), `del_coll:${id}`).row()
       .text("◀️ Назад", "my_colls");
-    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
@@ -363,7 +363,7 @@ export async function handleTelegramWebhook(request, env) {
     if (!alert) return await ctx.answerCallbackQuery();
     await setState(ctx, 'WAITING_EDIT_THRESHOLD', { edit_id: id, name: alert.collection_name, floor: alert.baseline_price });
     const kb = new InlineKeyboard().text("5%", "set_thr:5").text("10%", "set_thr:10").row().text("0.01 ETH", "set_thr:0.01eth").text("0.05 ETH", "set_thr:0.05eth").row().text("◀️ Назад", `view_coll:${id}`);
-    await ctx.editMessageText("Установите новый порог:", { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText("Установите новый порог:", { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
@@ -401,7 +401,7 @@ export async function handleTelegramWebhook(request, env) {
     const count = results ? results.length : 0;
     const text = `◎ <b>Solana Wallet Tracker</b>\n\nОтслеживается:\n${count} кошелька(ов)\n\nАктивных уведомлений:\n${count}\nㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤㅤ`;
     const kb = new InlineKeyboard().text("👛 Мои кошельки", "solana_list").row().text("➕ Добавить кошелёк", "solana_add").row().text("🔔 Уведомления", "solana_filters_main").row().text("◀️ Wallet Tracker", "wallet_home");
-    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
@@ -434,7 +434,7 @@ export async function handleTelegramWebhook(request, env) {
     const kb = new InlineKeyboard();
     if (results) results.forEach(w => kb.text(`🟢 ${w.name}`, `view_sol:${w.id}`).row());
     kb.text("➕ Добавить кошелёк", "solana_add").row().text("◀️ Solana", "solana_home");
-    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
@@ -445,7 +445,7 @@ export async function handleTelegramWebhook(request, env) {
     let bal = '?';
     try { bal = await getWalletBalance(w.address, ctx.env); } catch(e){}
     const kb = new InlineKeyboard().text("🔔 События", `sol_filters:${id}`).row().url("🔗 Открыть кошелёк", `https://solscan.io/account/${w.address}`).row().text("🗑 Удалить", `sol_del:${id}`).row().text("◀️ Solana Wallets", "solana_list");
-    await ctx.editMessageText(`◎ Solana\n\n👛 <b>${w.name}</b>\n<code>${w.address}</code>\n\n💰 Portfolio\n${bal} SOL`, { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText(`◎ Solana\n\n👛 <b>${w.name}</b>\n<code>${w.address}</code>\n\n💰 Portfolio\n${bal} SOL`, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
@@ -468,7 +468,7 @@ export async function handleTelegramWebhook(request, env) {
       .text(`NFT Sales ${filters.notify_nft ? '🟢 ON' : '🔴 OFF'}`, `sol_t_f:${id}:nft`).row()
       .text(`Mints ${filters.notify_mint ? '🟢 ON' : '🔴 OFF'}`, `sol_t_f:${id}:mint`).row()
       .text("◀️ Кошелёк", `view_sol:${id}`);
-    await ctx.editMessageText("🔔 <b>События</b>\n\nВыберите уведомления:", { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.editMessageText("🔔 <b>События</b>\n\nВыберите уведомления:", { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     await ctx.answerCallbackQuery();
   });
 
@@ -489,7 +489,7 @@ export async function handleTelegramWebhook(request, env) {
     if (state === 'WAITING_EVM_ADDRESS') {
       if (!/^0x[a-fA-F0-9]{40}$/i.test(text)) return await ctx.reply("❌ Некорректный адрес. Попробуйте еще раз.");
       const kb = new InlineKeyboard().text("✅ Добавить", `evm_confirm:${text}`).text("❌ Отмена", "evm_home");
-      return await ctx.reply(`🔎 <b>Кошелёк корректен</b>\n\n⟠ EVM\n<code>${text}</code>\n\nДобавить этот кошелёк в мониторинг?`, { parse_mode: 'HTML', reply_markup: kb });
+      return await ctx.reply(`🔎 <b>Кошелёк корректен</b>\n\n⟠ EVM\n<code>${text}</code>\n\nДобавить этот кошелёк в мониторинг?`, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     }
 
     if (state === 'WAITING_EVM_NAME') {
@@ -509,7 +509,7 @@ export async function handleTelegramWebhook(request, env) {
       let bal = '?';
       try { bal = await getWalletBalance(text, ctx.env); } catch(e){}
       const kb = new InlineKeyboard().text("✅ Добавить", `solana_confirm:${text}`).text("❌ Отмена", "solana_home");
-      return await ctx.reply(`🔎 <b>Кошелёк найден</b>\n\n◎ Solana\n<code>${text}</code>\n\nSOL:\n${bal} SOL\n\nДобавить этот кошелёк в мониторинг?`, { parse_mode: 'HTML', reply_markup: kb });
+      return await ctx.reply(`🔎 <b>Кошелёк найден</b>\n\n◎ Solana\n<code>${text}</code>\n\nSOL:\n${bal} SOL\n\nДобавить этот кошелёк в мониторинг?`, { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
     }
 
     if (state === 'WAITING_SOL_NAME') {
@@ -534,10 +534,10 @@ export async function handleTelegramWebhook(request, env) {
         const floor = statsRes.total.floor_price;
         await setState(ctx, 'IDLE', { slug, name, floor });
         const kb = new InlineKeyboard().text(t(ctx.lang, 'btn_create_alert'), `setup_alert:${slug}`).row().text(t(ctx.lang, 'btn_cancel'), "nft_home");
-        return await ctx.reply(t(ctx.lang, 'collection_found', { name, floor, change24h: '0', volume: statsRes.total.volume.toFixed(2) }), { parse_mode: 'HTML', reply_markup: kb });
+        return await ctx.reply(t(ctx.lang, 'collection_found', { name, floor, change24h: '0', volume: statsRes.total.volume.toFixed(2) }), { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
       } catch (e) {
         const kb = new InlineKeyboard().text(t(ctx.lang, 'btn_try_again'), "track_add").text(t(ctx.lang, 'btn_home'), "home");
-        return await ctx.reply(t(ctx.lang, 'collection_not_found'), { parse_mode: 'HTML', reply_markup: kb });
+        return await ctx.reply(t(ctx.lang, 'collection_not_found'), { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
       }
     }
 
@@ -557,14 +557,14 @@ export async function handleTelegramWebhook(request, env) {
           await setState(ctx, 'IDLE');
           const bounds = calculateBounds(data.floor, { threshold_type: type, threshold_abs: absVal, threshold_percent: percentVal });
           const kb = new InlineKeyboard().text(t(ctx.lang, 'btn_my_collections'), "my_colls").text(t(ctx.lang, 'btn_home'), "nft_home");
-          return await ctx.reply(t(ctx.lang, 'alert_created', { name: data.name, floor: data.floor, threshold: isPercent?`${val}%`:`${val} ETH`, upper: bounds.upper, lower: bounds.lower }), { parse_mode: 'HTML', reply_markup: kb });
+          return await ctx.reply(t(ctx.lang, 'alert_created', { name: data.name, floor: data.floor, threshold: isPercent?`${val}%`:`${val} ETH`, upper: bounds.upper, lower: bounds.lower }), { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
         } catch (e) { await setState(ctx, 'IDLE'); return await sendHomeMenu(ctx); }
       } else {
         await ctx.env.DB.prepare(`UPDATE price_alerts SET threshold_type = ?, threshold_abs = ?, threshold_percent = ?, updated_at = ? WHERE id = ? AND chat_id = ?`).bind(type, absVal, percentVal, now, data.edit_id, chatId).run();
         await setState(ctx, 'IDLE');
         const bounds = calculateBounds(data.floor, { threshold_type: type, threshold_abs: absVal, threshold_percent: percentVal });
         const kb = new InlineKeyboard().text("👀 К алерту", `view_coll:${data.edit_id}`).text(t(ctx.lang, 'btn_home'), "nft_home");
-        return await ctx.reply(t(ctx.lang, 'alert_changed', { name: data.name, floor: data.floor, threshold: isPercent?`${val}%`:`${val} ETH`, upper: bounds.upper, lower: bounds.lower }), { parse_mode: 'HTML', reply_markup: kb });
+        return await ctx.reply(t(ctx.lang, 'alert_changed', { name: data.name, floor: data.floor, threshold: isPercent?`${val}%`:`${val} ETH`, upper: bounds.upper, lower: bounds.lower }), { parse_mode: 'HTML', reply_markup: kb, link_preview_options: { is_disabled: true } });
       }
     }
   };
