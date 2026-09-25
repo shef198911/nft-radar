@@ -628,25 +628,64 @@ router.post('/ingest', async (request, env) => {
 });
 
 
-router.post('/evm/webhook', async (request, env) => {
+router.post('/evm/webhook', async (request, env, ctx) => {
   try {
     const body = await request.json();
     const { parseAlchemyWebhook } = await import('./alchemy.js');
     const messages = parseAlchemyWebhook(body);
-    console.log('Webhook activity length:', body?.event?.activity?.length, 'Hash:', messages.length > 0 ? messages[0].hash : 'none');
+    
     if (!messages || messages.length === 0) return new Response('OK');
     
-    // Group messages by transaction hash
+    const stmt = env.DB.prepare('INSERT INTO evm_queue (hash, payload, created_at) VALUES (?, ?, ?)');
+    const batch = messages.map(msg => stmt.bind(msg.hash, JSON.stringify(msg), Date.now()));
+    await env.DB.batch(batch);
+    
+    if (ctx && ctx.waitUntil) {
+      ctx.waitUntil((async () => {
+        await new Promise(r => setTimeout(r, 10000));
+        await processEvmQueue(env);
+      })());
+    }
+    
+    return new Response('OK');
+  } catch (e) {
+    console.error(e);
+    return new Response('OK');
+  }
+});
+
+
+router.get('/debug', (req, env) => {
+  return new Response(JSON.stringify({
+    hasToken: !!env.TELEGRAM_BOT_TOKEN,
+    chatId: env.TELEGRAM_CHAT_ID,
+    targets: env.TELEGRAM_TARGETS_PRIVATE,
+    targetsOld: env.TELEGRAM_TARGETS
+  }));
+});
+
+router.all('*', () => new Response('Not Found', { status: 404 }));
+
+
+async function processEvmQueue(env) {
+  try {
+    const cutoff = Date.now() - 9000; // Give it 1 second buffer
+    const { results } = await env.DB.prepare("UPDATE evm_queue SET status = 'processing' WHERE status = 'pending' AND created_at < ? RETURNING *").bind(cutoff).all();
+    
+    if (!results || results.length === 0) return;
+    
     const byHash = {};
-    for (const msg of messages) {
-      if (!byHash[msg.hash]) byHash[msg.hash] = [];
-      byHash[msg.hash].push(msg);
+    for (const row of results) {
+      try {
+        const msg = JSON.parse(row.payload);
+        if (!byHash[msg.hash]) byHash[msg.hash] = [];
+        byHash[msg.hash].push(msg);
+      } catch (e) {}
     }
     
     for (const hash in byHash) {
       const txMsgs = byHash[hash];
       
-      // Collect all involved addresses
       const involved = new Set();
       for (const msg of txMsgs) {
         if (msg.from) involved.add(msg.from.toLowerCase());
@@ -657,17 +696,13 @@ router.post('/evm/webhook', async (request, env) => {
       if (involvedArr.length === 0) continue;
       
       const placeholders = involvedArr.map(() => '?').join(',');
-      const { results } = await env.DB.prepare(`SELECT w.chat_id, w.name, w.address, f.notify_transfer, f.notify_nft FROM evm_wallets w JOIN evm_filters f ON w.id = f.wallet_id WHERE LOWER(w.address) IN (${placeholders})`).bind(...involvedArr).all();
+      const { results: wallets } = await env.DB.prepare(`SELECT w.chat_id, w.name, w.address, f.notify_transfer, f.notify_nft FROM evm_wallets w JOIN evm_filters f ON w.id = f.wallet_id WHERE LOWER(w.address) IN (${placeholders})`).bind(...involvedArr).all();
       
-      if (!results || results.length === 0) continue;
+      if (!wallets || wallets.length === 0) continue;
       
-      for (const w of results) {
+      for (const w of wallets) {
         const myAddr = w.address.toLowerCase();
-        
-        // Filter messages for this specific wallet
         let myMsgs = txMsgs.filter(m => (m.from && m.from.toLowerCase() === myAddr) || (m.to && m.to.toLowerCase() === myAddr));
-        
-        // Apply user filters
         myMsgs = myMsgs.filter(m => (m.category === 'transfer' && w.notify_transfer) || (m.category === 'nft' && w.notify_nft));
         
         if (myMsgs.length === 0) continue;
@@ -716,83 +751,20 @@ router.post('/evm/webhook', async (request, env) => {
         });
       }
     }
-    return new Response('OK');
-
     
-    for (const msg of messages) {
-      const fromAddr = msg.from ? msg.from.toLowerCase() : '';
-      const toAddr = msg.to ? msg.to.toLowerCase() : '';
-      
-      const { results } = await env.DB.prepare('SELECT w.chat_id, w.name, w.address, f.notify_transfer, f.notify_swap, f.notify_nft FROM evm_wallets w JOIN evm_filters f ON w.id = f.wallet_id WHERE LOWER(w.address) = ? OR LOWER(w.address) = ?').bind(fromAddr, toAddr).all();
-      
-      if (results && results.length > 0) {
-        for (const w of results) {
-          let shouldSend = false;
-          if (msg.category === 'transfer' && w.notify_transfer) shouldSend = true;
-          if (msg.category === 'swap' && w.notify_swap) shouldSend = true;
-          if (msg.category === 'nft' && w.notify_nft) shouldSend = true;
-          
-          if (shouldSend) {
-            const isReceived = w.address.toLowerCase() === toAddr;
-            const shorten = (a) => a ? `${a.slice(0, 4)}..${a.slice(-4)}` : 'Unknown';
-            const counterparty = isReceived ? shorten(fromAddr) : shorten(toAddr);
-            
-            let netIcon = '🔗';
-            if (msg.network === 'Polygon') netIcon = '<tg-emoji emoji-id="5397954355477377973">🟣</tg-emoji>';
-            else if (msg.network === 'Base') netIcon = '🔵';
-            else if (msg.network === 'Arbitrum') netIcon = '🔵';
-            else if (msg.network === 'Optimism') netIcon = '🔴';
-            else if (msg.network === 'BSC') netIcon = '🟡';
-            else if (msg.network === 'Ethereum' || msg.network === 'ETH') netIcon = '<tg-emoji emoji-id="5400219289301054663">🌐</tg-emoji>';
-            
-            let formatted = `<a href="https://etherscan.io/address/${w.address}"><b>${w.name}</b></a> · ${netIcon} <b>${msg.network.toUpperCase()}</b>
-`;
-            
-            if (msg.category === 'transfer') {
-                const icon = isReceived ? '🤑' : '💸';
-                const action = isReceived ? 'Получено:' : 'Отправлено:';
-                const dir = isReceived ? '📥 От:' : '📤 На:';
-                formatted += `
-${icon} ${action} ${msg.value} ${msg.asset} ${dir} ${counterparty}`;
-            } else {
-                const icon = isReceived ? '🖼' : '🖼';
-                const action = isReceived ? 'Получен NFT:' : 'Отправлен NFT:';
-                const dir = isReceived ? '📥 От:' : '📤 На:';
-                formatted += `
-${icon} ${action} ID ${msg.tokenId} ${dir} ${counterparty}`;
-            }
-            
-            formatted += `
-<a href="${msg.explorerUrl}">🔗 Tx hash</a>`;
-
-            await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: w.chat_id, text: formatted, parse_mode: 'HTML', disable_web_page_preview: true })
-            });
-          }
-        }
-      }
+    // cleanup
+    const ids = results.map(r => r.id);
+    if (ids.length > 0) {
+      const ph = ids.map(() => '?').join(',');
+      await env.DB.prepare(`DELETE FROM evm_queue WHERE id IN (${ph})`).bind(...ids).run();
     }
-    return new Response('OK');
-  } catch (e) {
-    console.error(e);
-    return new Response('OK');
+  } catch(e) {
+    console.error('processEvmQueue error', e);
   }
-});
-
-
-router.get('/debug', (req, env) => {
-  return new Response(JSON.stringify({
-    hasToken: !!env.TELEGRAM_BOT_TOKEN,
-    chatId: env.TELEGRAM_CHAT_ID,
-    targets: env.TELEGRAM_TARGETS_PRIVATE,
-    targetsOld: env.TELEGRAM_TARGETS
-  }));
-});
-
-router.all('*', () => new Response('Not Found', { status: 404 }));
+}
 
 export default {
+
   async fetch(request, env, ctx) {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
