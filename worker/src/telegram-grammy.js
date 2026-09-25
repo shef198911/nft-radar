@@ -201,14 +201,14 @@ export async function handleTelegramWebhook(request, env) {
     const isRu = ctx.lang === 'ru';
     
     const kb = new InlineKeyboard()
-      .text(isRu ? "🖼 NFT Tracker" : "🖼 NFT Tracker", "nft_home").text(isRu ? "👛 Wallet Tracker" : "👛 Wallet Tracker", "wallet_home").row()
+      .text(isRu ? "👤 Мои профили" : "👤 My Profiles", "profiles_home").row()
       .text(isRu ? "⚙️ Настройки" : "⚙️ Settings", "settings").text(isRu ? "📖 Как это работает" : "📖 How it works", "how_it_works");
     
     const bannerUrl = 'https://files.catbox.moe/nq6nwb.jpg';
     
     const text = (isRu ? 
-      "Салют! 🤙\nЯ бот, который следит за кошельками вместо тебя.\n\nПросто добавь адреса, за которыми хочешь наблюдать, и я сразу пришлю уведомление, как только там произойдет любое движение средств.\n\nВыбирай нужный трекер в меню ниже и погнали!" :
-      "Cheers! 🤙\nI am a bot that monitors crypto wallets for you.\n\nJust add the addresses you want to track, and I will instantly send a notification as soon as any funds move.\n\nChoose a tracker in the menu below and let's go!") + `<a href="${bannerUrl}">&#8205;</a>`;
+      "Салют! 🤙\nЯ мультитул-бот, который следит за рынком вместо тебя.\n\nЯ умею отслеживать любые изменения на криптокошельках, движение цен на NFT коллекции, а также взлеты и падения цены любых смарт-контрактов (Coin Tracker).\n\nВыбирай свой профиль в меню ниже и погнали!" :
+      "Cheers! 🤙\nI am a multitool bot that monitors the market for you.\n\nI can track any changes on crypto wallets, price movements on NFT collections, and price surges/drops of any smart contracts (Coin Tracker).\n\nChoose your profile in the menu below and let's go!") + `<a href="${bannerUrl}">&#8205;</a>`;
 
     const opts = { 
       parse_mode: 'HTML', 
@@ -222,6 +222,8 @@ export async function handleTelegramWebhook(request, env) {
       await ctx.reply(text, opts);
     }
   };
+
+
 
   
   
@@ -276,11 +278,7 @@ export async function handleTelegramWebhook(request, env) {
     }
   });
 
-  bot.command(["start", "home", "cancel"], async (ctx) => {
-  const kb = new InlineKeyboard()
-    .text("👤 Мои профили", "profiles_home").row()
-    .text("⚙️ Настройки", "settings").text("ℹ️ Как это работает", "how_it_works");
-  return await ctx.reply("🏠 <b>Главное меню</b>", { parse_mode: 'HTML', reply_markup: kb });
+  bot.command(["start", "home", "cancel"], async (ctx) => { await setState(ctx, "IDLE"); await sendHomeMenu(ctx); });
 });
 
   bot.callbackQuery(/^set_lang:(.+)/, async (ctx) => {

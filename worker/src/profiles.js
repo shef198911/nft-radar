@@ -3,7 +3,7 @@ import { searchDexScreener } from './dexscreener.js';
 
 export async function setState(ctx, state, data = '{}') {
   const userId = ctx.from.id.toString();
-  await ctx.env.DB.prepare('UPDATE user_settings SET state = ?, state_data = ? WHERE user_id = ?').bind(state, data, userId).run();
+  await ctx.env.DB.prepare('UPDATE telegram_users SET state = ?, state_data = ?, updated_at = ? WHERE chat_id = ?').bind(state, data, new Date().toISOString(), ctx.from.id.toString()).run();
 }
 
 export async function handleProfilesHome(ctx) {
