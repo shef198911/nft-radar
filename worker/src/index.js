@@ -23,7 +23,7 @@ import {
 } from './opensea.js';
 import { runAIFilter } from './ai-classifier.js';
 
-import { handleTelegramWebhook, checkPriceAlerts } from './telegram-grammy.js';
+import { handleTelegramWebhook, checkPriceAlerts, checkCoinAlerts } from './telegram-grammy.js';
 
 const router = Router();
 
@@ -807,12 +807,14 @@ export default {
       ctx.waitUntil(Promise.all([
         runOpenSeaScan(env),
         sendDailySummary(env, scheduledAt),
-        checkPriceAlerts(env)
+        checkPriceAlerts(env),
+        checkCoinAlerts(env)
       ]));
     } else {
       ctx.waitUntil(Promise.all([
         runOpenSeaScan(env),
-        checkPriceAlerts(env)
+        checkPriceAlerts(env),
+        checkCoinAlerts(env)
       ]));
     }
   }

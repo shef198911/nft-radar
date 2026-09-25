@@ -4,6 +4,75 @@ import { getWalletBalance, updateWebhook } from './helius.js';
 import { t } from './i18n.js';
 import { initAlchemyWebhooks, updateAlchemyAddresses } from './alchemy.js';
 
+import { searchDexScreener, getDexScreenerTokensByAddress } from './dexscreener.js';
+import { 
+  setState, handleProfilesHome, handleWalletHub, handleCoinHome, 
+  handleCoinAdd, processCoinQuery, handleCoinSelect, saveCoinTracker, 
+  handleCoinEdit, handleCoinChat 
+} from './profiles.js';
+
+
+
+export async function checkCoinAlerts(env) {
+  const { results: trackers } = await env.DB.prepare(`
+    SELECT t.*, c.target_chat_id, p.chat_id as owner_chat_id 
+    FROM coin_trackers t 
+    JOIN coin_collections c ON t.collection_id = c.id
+    JOIN profiles p ON c.profile_id = p.id
+  `).all();
+  
+  if (!trackers || trackers.length === 0) return;
+
+  const addresses = [...new Set(trackers.map(t => t.contract_address))];
+  
+  // Batch into 30
+  const batches = [];
+  for (let i = 0; i < addresses.length; i += 30) {
+    batches.push(addresses.slice(i, i + 30));
+  }
+  
+  const currentPrices = {};
+  
+  for (const batch of batches) {
+    const tokens = await getDexScreenerTokensByAddress(batch);
+    for (const t of tokens) {
+      currentPrices[t.contract_address] = t.priceUsd;
+    }
+  }
+
+  for (const tracker of trackers) {
+    const currentPrice = currentPrices[tracker.contract_address];
+    if (!currentPrice) continue;
+    
+    const basePrice = tracker.baseline_price;
+    const diff = (currentPrice - basePrice) / basePrice * 100;
+    
+    // Check if absolute difference is greater than trigger percent
+    if (Math.abs(diff) >= tracker.trigger_percent) {
+       const isUp = diff > 0;
+       const emoji = isUp ? '🚀' : '📉';
+       const pStr = currentPrice < 0.001 ? currentPrice.toFixed(8) : currentPrice.toFixed(4);
+       
+       const msg = `${emoji} <b>$wait${tracker.ticker}</b> (${tracker.network.toUpperCase()})\n\nЦена изменилась на <b>${Math.abs(diff).toFixed(2)}%</b>!\n\nСтарая цена: ${basePrice}\nНовая цена: ${pStr}\n\n<a href="https://dexscreener.com/${tracker.network}/${tracker.contract_address}">🔗 Открыть график DexScreener</a>`;
+       
+       const chatId = tracker.target_chat_id || tracker.owner_chat_id;
+       
+       try {
+         await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'HTML', disable_web_page_preview: true })
+         });
+         
+         // Update baseline so it doesn't spam
+         await env.DB.prepare('UPDATE coin_trackers SET baseline_price = ? WHERE id = ?').bind(currentPrice, tracker.id).run();
+       } catch (e) {
+         console.error('Failed to send coin alert', e);
+       }
+    }
+  }
+}
+
 export async function checkPriceAlerts(env) {
   const { results: alerts } = await env.DB.prepare('SELECT * FROM price_alerts WHERE is_active = 1').all();
   if (!alerts || alerts.length === 0) return;
@@ -208,13 +277,11 @@ export async function handleTelegramWebhook(request, env) {
   });
 
   bot.command(["start", "home", "cancel"], async (ctx) => {
-    if (ctx.match === 'start' || ctx.message.text === '/start') {
-      await ctx.env.DB.prepare('UPDATE telegram_users SET language = NULL WHERE chat_id = ?').bind(ctx.chat.id.toString()).run();
-      ctx.user.language = null;
-    }
-    await setState(ctx, 'IDLE');
-    await sendHomeMenu(ctx);
-  });
+  const kb = new InlineKeyboard()
+    .text("👤 Мои профили", "profiles_home").row()
+    .text("⚙️ Настройки", "settings").text("ℹ️ Как это работает", "how_it_works");
+  return await ctx.reply("🏠 <b>Главное меню</b>", { parse_mode: 'HTML', reply_markup: kb });
+});
 
   bot.callbackQuery(/^set_lang:(.+)/, async (ctx) => {
     const lang = ctx.match[1];
@@ -223,6 +290,59 @@ export async function handleTelegramWebhook(request, env) {
     ctx.lang = lang;
     await sendHomeMenu(ctx);
     await ctx.answerCallbackQuery();
+  });
+
+  
+  bot.callbackQuery("profiles_home", async (ctx) => { await handleProfilesHome(ctx); await ctx.answerCallbackQuery(); });
+  bot.callbackQuery("wallet_hub", async (ctx) => { await handleWalletHub(ctx); await ctx.answerCallbackQuery(); });
+  bot.callbackQuery("coin_home", async (ctx) => { await handleCoinHome(ctx); await ctx.answerCallbackQuery(); });
+  
+  bot.callbackQuery(/^coin_add:(.+)/, async (ctx) => { 
+    await handleCoinAdd(ctx, ctx.match[1]); 
+    await ctx.answerCallbackQuery(); 
+  });
+  
+  bot.callbackQuery(/^coin_sel:(.+):(.+)/, async (ctx) => { 
+    await handleCoinSelect(ctx, ctx.match[1], ctx.match[2]); 
+    await ctx.answerCallbackQuery(); 
+  });
+  
+  bot.callbackQuery(/^coin_pct:(.+)/, async (ctx) => { 
+    await saveCoinTracker(ctx, ctx.match[1]); 
+    await ctx.answerCallbackQuery(); 
+  });
+  
+  bot.callbackQuery("coin_pct_manual", async (ctx) => { 
+    await ctx.reply("✍️ Введите желаемый процент изменения (например, 15.5):");
+    await ctx.answerCallbackQuery(); 
+  });
+  
+  bot.callbackQuery(/^coin_edit:(.+)/, async (ctx) => { 
+    await handleCoinEdit(ctx, ctx.match[1]); 
+    await ctx.answerCallbackQuery(); 
+  });
+  
+  bot.callbackQuery(/^coin_del:(.+)/, async (ctx) => { 
+    await ctx.env.DB.prepare('DELETE FROM coin_trackers WHERE id = ?').bind(ctx.match[1]).run();
+    await ctx.reply("🗑 Токен удален.");
+    await handleCoinHome(ctx);
+    await ctx.answerCallbackQuery(); 
+  });
+  
+  bot.callbackQuery(/^coin_edit_pct:(.+)/, async (ctx) => { 
+    // Just delete and ask to re-add for simplicity in edit, or add a specific state. Let's do simple state.
+    const t = await ctx.env.DB.prepare('SELECT * FROM coin_trackers WHERE id = ?').bind(ctx.match[1]).first();
+    if (t) {
+       await setState(ctx, 'WAITING_COIN_PERCENT', JSON.stringify({ collectionId: t.collection_id, contract: t.contract_address, network: t.network, ticker: t.ticker, price: t.baseline_price }));
+       await ctx.env.DB.prepare('DELETE FROM coin_trackers WHERE id = ?').bind(ctx.match[1]).run(); // delete old
+       await ctx.reply(`🪙 <b>${t.ticker}</b>\nВведите новый процент для триггера (старый был ${t.trigger_percent}%):`, { parse_mode: 'HTML' });
+    }
+    await ctx.answerCallbackQuery(); 
+  });
+  
+  bot.callbackQuery(/^coin_chat:(.+)/, async (ctx) => { 
+    await handleCoinChat(ctx, ctx.match[1]); 
+    await ctx.answerCallbackQuery(); 
   });
 
   bot.callbackQuery("home", async (ctx) => {
@@ -557,6 +677,48 @@ export async function handleTelegramWebhook(request, env) {
     const state = ctx.user.state;
     const now = new Date().toISOString();
 
+    
+    if (state === 'WAITING_PROFILE_NAME') {
+      const now = new Date().toISOString();
+      await ctx.env.DB.prepare('INSERT INTO profiles (chat_id, name, created_at) VALUES (?, ?, ?)').bind(chatId, text, now).run();
+      await setState(ctx, 'IDLE');
+      return await handleProfilesHome(ctx);
+    }
+    
+    if (state === 'WAITING_COIN_COLLECTION_NAME') {
+      const data = JSON.parse(ctx.user.state_data);
+      const now = new Date().toISOString();
+      await ctx.env.DB.prepare('INSERT INTO coin_collections (profile_id, name, created_at) VALUES (?, ?, ?)').bind(data.profileId, text, now).run();
+      await setState(ctx, 'IDLE');
+      return await handleCoinHome(ctx);
+    }
+
+    if (state === 'WAITING_COIN_QUERY') {
+      return await processCoinQuery(ctx, text);
+    }
+
+    if (state === 'WAITING_COIN_PERCENT') {
+      return await saveCoinTracker(ctx, text);
+    }
+
+    if (state === 'WAITING_COIN_CHAT') {
+      const data = JSON.parse(ctx.user.state_data);
+      let targetChatId = text;
+      
+      if (text === '0') {
+         targetChatId = null;
+         await ctx.reply("✅ Привязка к группе удалена.");
+      } else if (ctx.message.forward_from_chat) {
+         targetChatId = ctx.message.forward_from_chat.id.toString();
+      } else if (!text.startsWith('-')) {
+         return await ctx.reply("❌ Некорректный ID группы. Должен начинаться с минуса (например, -100123456789). Перешлите сообщение из группы или введите корректный ID.");
+      }
+      
+      await ctx.env.DB.prepare('UPDATE coin_collections SET target_chat_id = ? WHERE id = ?').bind(targetChatId, data.collectionId).run();
+      await setState(ctx, 'IDLE');
+      if (targetChatId) await ctx.reply(`✅ Коллекция успешно привязана к чату <code>${targetChatId}</code>`, { parse_mode: 'HTML' });
+      return await handleCoinHome(ctx);
+    }
     if (state === 'WAITING_EVM_ADDRESS') {
       if (!/^0x[a-fA-F0-9]{40}$/i.test(text)) return await ctx.reply("❌ Некорректный адрес. Попробуйте еще раз.");
       const kb = new InlineKeyboard().text("✅ Добавить", `evm_confirm:${text}`).text("❌ Отмена", "evm_home");
