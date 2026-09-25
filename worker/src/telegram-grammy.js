@@ -279,7 +279,6 @@ export async function handleTelegramWebhook(request, env) {
   });
 
   bot.command(["start", "home", "cancel"], async (ctx) => { await setState(ctx, "IDLE"); await sendHomeMenu(ctx); });
-});
 
   bot.callbackQuery(/^set_lang:(.+)/, async (ctx) => {
     const lang = ctx.match[1];
