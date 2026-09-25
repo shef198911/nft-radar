@@ -278,7 +278,11 @@ export async function handleTelegramWebhook(request, env) {
     }
   });
 
-  bot.command(["start", "home", "cancel"], async (ctx) => {
+  
+  bot.command("chatid", async (ctx) => {
+    return await ctx.reply(`ID этой группы: <code>${ctx.chat.id}</code>`, { parse_mode: 'HTML' });
+  });
+bot.command(["start", "home", "cancel"], async (ctx) => {
   const payload = ctx.match; // Grammy automatically parses payload from /start <payload>
   
   if (payload && payload.startsWith('col_')) {
