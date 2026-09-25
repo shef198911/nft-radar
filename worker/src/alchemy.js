@@ -92,7 +92,8 @@ export function parseAlchemyWebhook(body) {
     'ARB_MAINNET': 'Arbitrum',
     'OPT_MAINNET': 'Optimism',
     'MATIC_MAINNET': 'Polygon',
-    'BASE_MAINNET': 'Base'
+    'BASE_MAINNET': 'Base',
+    'BNB_MAINNET': 'BSC'
   };
   const chainName = chainNames[network] || network;
 
@@ -103,6 +104,7 @@ export function parseAlchemyWebhook(body) {
       case 'OPT_MAINNET': return `https://optimistic.etherscan.io/tx/${hash}`;
       case 'MATIC_MAINNET': return `https://polygonscan.com/tx/${hash}`;
       case 'BASE_MAINNET': return `https://basescan.org/tx/${hash}`;
+      case 'BNB_MAINNET': return `https://bscscan.com/tx/${hash}`;
       default: return `https://etherscan.io/tx/${hash}`;
     }
   };
