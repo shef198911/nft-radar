@@ -707,6 +707,14 @@ async function processEvmQueue(env) {
         
         if (myMsgs.length === 0) continue;
         
+        
+const formatCrypto = (v) => { 
+  const n = parseFloat(v); 
+  if(isNaN(n) || n === 0) return v; 
+  if(n < 1) return Number(n.toPrecision(4)).toString(); 
+  if(n < 100) return Number(n.toPrecision(5)).toString(); 
+  return Number(n.toFixed(2)).toString(); 
+};
         const isMultiple = myMsgs.length > 1;
         const shorten = (a) => a ? `${a.slice(0, 4)}..${a.slice(-4)}` : 'Unknown';
         
@@ -721,11 +729,11 @@ async function processEvmQueue(env) {
         let formatted = `<a href="https://etherscan.io/address/${w.address}"><b>${w.name}</b></a> · ${netIcon} <b>${net.toUpperCase()}</b>\n`;
         
         if (isMultiple) {
-          formatted += `\n🔄 <b>Свап / Мульти-транзакция</b>\n`;
+          formatted += `\n🔄 <b>Swap</b>\n`;
           for (const msg of myMsgs) {
             const isReceived = msg.to && msg.to.toLowerCase() === myAddr;
             if (msg.category === 'transfer') {
-              formatted += `${isReceived ? '📥 Получено:' : '📤 Отправлено:'} ${msg.value} ${msg.asset}\n`;
+              formatted += `${isReceived ? '📥 Получено:' : '📤 Отправлено:'} ${formatCrypto(msg.value)} ${msg.asset}\n`;
             } else {
               formatted += `${isReceived ? '🖼 Получен' : '🖼 Отправлен'} NFT ID ${msg.tokenId}\n`;
             }
@@ -737,7 +745,7 @@ async function processEvmQueue(env) {
           
           if (msg.category === 'transfer') {
             const icon = isReceived ? '🤑' : '💸';
-            formatted += `\n${icon} ${isReceived ? 'Получено:' : 'Отправлено:'} ${msg.value} ${msg.asset} ${isReceived ? '📥 От:' : '📤 На:'} ${counterparty}\n`;
+            formatted += `\n${icon} ${isReceived ? 'Получено:' : 'Отправлено:'} ${formatCrypto(msg.value)} ${msg.asset} ${isReceived ? '📥 От:' : '📤 На:'} ${counterparty}\n`;
           } else {
             formatted += `\n🖼 ${isReceived ? 'Получен NFT:' : 'Отправлен NFT:'} ID ${msg.tokenId} ${isReceived ? '📥 От:' : '📤 На:'} ${counterparty}\n`;
           }
