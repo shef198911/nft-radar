@@ -135,7 +135,7 @@ export async function handleTelegramWebhook(request, env) {
       .text(isRu ? "🖼 NFT Tracker" : "🖼 NFT Tracker", "nft_home").text(isRu ? "👛 Wallet Tracker" : "👛 Wallet Tracker", "wallet_home").row()
       .text(isRu ? "⚙️ Настройки" : "⚙️ Settings", "settings").text(isRu ? "📖 Как это работает" : "📖 How it works", "how_it_works");
     
-    const bannerUrl = 'https://files.catbox.moe/5pou02.jpg';
+    const bannerUrl = 'https://files.catbox.moe/nq6nwb.jpg';
     
     const text = (isRu ? 
       "Салют! 🤙\nЯ бот, который следит за кошельками вместо тебя.\n\nПросто добавь адреса, за которыми хочешь наблюдать, и я сразу пришлю уведомление, как только там произойдет любое движение средств.\n\nВыбирай нужный трекер в меню ниже и погнали!" :
