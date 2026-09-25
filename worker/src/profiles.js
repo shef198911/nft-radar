@@ -1,5 +1,5 @@
 import { InlineKeyboard } from "grammy";
-import { searchDexScreener } from './dexscreener.js';
+import { searchGeckoTerminal } from './geckoterminal.js';
 
 export async function setState(ctx, state, data = '{}') {
   const userId = ctx.from.id.toString();
@@ -76,9 +76,9 @@ export async function handleCoinAdd(ctx, collectionId) {
 
 export async function processCoinQuery(ctx, query) {
   const data = JSON.parse(ctx.user.state_data);
-  const msg = await ctx.reply("⏳ Ищу токен на DexScreener...");
+  const msg = await ctx.reply("⏳ Ищу токен на GeckoTerminal...");
   
-  const tokens = await searchDexScreener(query);
+  const tokens = await searchGeckoTerminal(query);
   await ctx.api.deleteMessage(ctx.chat.id, msg.message_id);
 
   if (!tokens || tokens.length === 0) {
@@ -91,7 +91,7 @@ export async function processCoinQuery(ctx, query) {
   tokens.forEach((t, index) => {
     const p = t.priceUsd ? (t.priceUsd < 0.001 ? t.priceUsd.toFixed(8) : t.priceUsd.toFixed(4)) : '0';
     text += `${index + 1}. <b>$${t.ticker}</b> (${t.name}) на сети <b>${t.network.toUpperCase()}</b> - Цена: $${p}\n`;
-    kb.text(`${index + 1}`, `coin_sel:${data.collectionId}:${t.contract_address}`).text("🔗 DexScreener", `url_https://dexscreener.com/${t.network}/${t.contract_address}`).row();
+    kb.text(`${index + 1}`, `coin_sel:${data.collectionId}:${t.contract_address}`).text("🔗 GeckoTerminal", `url_https://geckoterminal.com/${t.network}/${t.contract_address}`).row();
   });
   
   kb.text("❌ Отмена", "coin_home");
@@ -100,7 +100,7 @@ export async function processCoinQuery(ctx, query) {
 
 export async function handleCoinSelect(ctx, collectionId, contract) {
   // Fetch specific token
-  const tokens = await searchDexScreener(contract);
+  const tokens = await searchGeckoTerminal(contract);
   if (!tokens || tokens.length === 0) return await ctx.reply("❌ Ошибка получения цены токена.");
   const token = tokens[0];
 
