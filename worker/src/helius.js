@@ -60,6 +60,16 @@ export function parseTransaction(tx, monitoredAddress) {
   const time = new Date(tx.timestamp * 1000).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   
   const shorten = (addr) => addr ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : 'Unknown';
+
+const formatCrypto = (v) => { 
+  const n = parseFloat(v); 
+  if(isNaN(n) || n === 0) return v; 
+  if(n < 1) return Number(n.toPrecision(4)).toString(); 
+  if(n < 100) return Number(n.toPrecision(5)).toString(); 
+  return Number(n.toFixed(2)).toString(); 
+};
+const getTokenLink = (mint) => `<a href="https://solscan.io/token/${mint}">${mint.slice(0,4)}..</a>`;
+
   
   let formatted = '';
   let category = 'other'; // swap, transfer, nft, mint, stake, other
@@ -84,11 +94,11 @@ export function parseTransaction(tx, monitoredAddress) {
     let outStrs = [];
     let inStrs = [];
     
-    for (const t of solSent) outStrs.push(`🔴 ${(t.amount / 1e9).toFixed(4)} SOL`);
-    for (const t of userSent) outStrs.push(`🔴 ${t.tokenAmount} ${t.mint.slice(0,4)}`); // Ideally fetch symbol
+    for (const t of solSent) outStrs.push(`🔴 ${formatCrypto(t.amount / 1e9)} SOL`);
+    for (const t of userSent) outStrs.push(`🔴 ${formatCrypto(t.tokenAmount)} ${getTokenLink(t.mint)}`);
     
-    for (const t of solRecv) inStrs.push(`🟢 ${(t.amount / 1e9).toFixed(4)} SOL`);
-    for (const t of userRecv) inStrs.push(`🟢 ${t.tokenAmount} ${t.mint.slice(0,4)}`);
+    for (const t of solRecv) inStrs.push(`🟢 ${formatCrypto(t.amount / 1e9)} SOL`);
+    for (const t of userRecv) inStrs.push(`🟢 ${formatCrypto(t.tokenAmount)} ${getTokenLink(t.mint)}`);
 
     formatted = `🔄 <b>SWAP</b>\n\nОтдал:\n${outStrs.join('\n') || '🔴 0'}\n\nПолучил:\n${inStrs.join('\n') || '🟢 0'}\n\nDEX: ${source}\n⏱ ${time}`;
   } 
@@ -108,11 +118,11 @@ export function parseTransaction(tx, monitoredAddress) {
     const tokenOut = tx.tokenTransfers.find(t => t.fromUserAccount === monitoredAddress);
 
     if (nativeIn) {
-      isSol = true; isReceived = true; amountStr = `◎ ${(nativeIn.amount / 1e9).toFixed(4)} SOL`; party = nativeIn.fromUserAccount;
+      isSol = true; isReceived = true; amountStr = `◎ ${formatCrypto(nativeIn.amount / 1e9)} SOL`; party = nativeIn.fromUserAccount;
     } else if (nativeOut) {
-      isSol = true; isReceived = false; amountStr = `◎ ${(nativeOut.amount / 1e9).toFixed(4)} SOL`; party = nativeOut.toUserAccount;
+      isSol = true; isReceived = false; amountStr = `◎ ${formatCrypto(nativeOut.amount / 1e9)} SOL`; party = nativeOut.toUserAccount;
     } else if (tokenIn) {
-      isReceived = true; amountStr = `🪙 ${tokenIn.tokenAmount} ${tokenIn.mint.slice(0,4)}`; party = tokenIn.fromUserAccount;
+      isReceived = true; amountStr = `🪙 ${formatCrypto(tokenIn.tokenAmount)} ${getTokenLink(tokenIn.mint)}`; party = tokenIn.fromUserAccount;
     } else if (tokenOut) {
       isReceived = false; amountStr = `🪙 ${tokenOut.tokenAmount} ${tokenOut.mint.slice(0,4)}`; party = tokenOut.toUserAccount;
     }
