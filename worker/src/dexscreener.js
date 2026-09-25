@@ -2,8 +2,8 @@ export async function searchDexScreener(query) {
   // Query can be a contract address or a ticker
   const url = `https://api.dexscreener.com/latest/dex/search?q=${query}`;
   try {
-    const res = await fetch(url);
-    if (!res.ok) return [];
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' } });
+    if (!res.ok) { console.error('DexScreener fetch failed', res.status, res.statusText); return []; }
     const data = await res.json();
     if (!data.pairs) return [];
     
@@ -45,7 +45,7 @@ export async function getDexScreenerTokensByAddress(addresses) {
   
   const url = `https://api.dexscreener.com/latest/dex/tokens/${addrs}`;
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' } });
     if (!res.ok) return [];
     const data = await res.json();
     if (!data.pairs) return [];
