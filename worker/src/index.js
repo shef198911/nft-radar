@@ -633,6 +633,7 @@ router.post('/evm/webhook', async (request, env) => {
     const body = await request.json();
     const { parseAlchemyWebhook } = await import('./alchemy.js');
     const messages = parseAlchemyWebhook(body);
+    console.log('Webhook activity length:', body?.event?.activity?.length, 'Hash:', messages.length > 0 ? messages[0].hash : 'none');
     if (!messages || messages.length === 0) return new Response('OK');
     
     // Group messages by transaction hash
