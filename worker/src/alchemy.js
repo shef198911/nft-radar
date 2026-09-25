@@ -123,7 +123,7 @@ export function parseAlchemyWebhook(body) {
       case 'AVAX_MAINNET': return `https://snowtrace.io/tx/${hash}`;
       case 'LINEA_MAINNET': return `https://lineascan.build/tx/${hash}`;
       case 'ZKSYNC_MAINNET': return `https://explorer.zksync.io/tx/${hash}`;
-      case 'ROBINHOOD_MAINNET': return `https://explorer.robinhood.com/tx/${hash}`;
+      case 'ROBINHOOD_MAINNET': return `https://robinscan.io/tx/${hash}`;
       case 'SCROLL_MAINNET': return `https://scrollscan.com/tx/${hash}`;
       default: return `https://etherscan.io/tx/${hash}`;
     }
@@ -141,7 +141,7 @@ export function parseAlchemyWebhook(body) {
       case 'AVAX_MAINNET': return `https://snowtrace.io/token/${contractAddress}`;
       case 'LINEA_MAINNET': return `https://lineascan.build/token/${contractAddress}`;
       case 'ZKSYNC_MAINNET': return `https://explorer.zksync.io/token/${contractAddress}`;
-      case 'ROBINHOOD_MAINNET': return `https://explorer.robinhood.com/token/${contractAddress}`;
+      case 'ROBINHOOD_MAINNET': return `https://robinscan.io/token/${contractAddress}`;
       case 'SCROLL_MAINNET': return `https://scrollscan.com/token/${contractAddress}`;
       default: return `https://etherscan.io/token/${contractAddress}`;
     }
