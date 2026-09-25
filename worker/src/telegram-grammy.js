@@ -155,6 +155,13 @@ export async function handleTelegramWebhook(request, env) {
   };
 
   
+  
+  bot.command('broadcast', async (ctx) => {
+    if (ctx.from.id !== 332680373) return;
+    await setState(ctx, 'WAITING_BROADCAST');
+    return await ctx.reply("📣 <b>Режим рассылки</b>\n\nОтправьте мне сообщение (текст, фото, видео), которое нужно разослать ВСЕМ пользователям.\n\nДля отмены нажмите /cancel", { parse_mode: 'HTML' });
+  });
+
   bot.command('stats', async (ctx) => {
     // Only allow your Telegram ID
     if (ctx.from.id !== 332680373) return;
