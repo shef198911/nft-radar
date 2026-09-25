@@ -112,7 +112,7 @@ export function parseAlchemyWebhook(body) {
   let messages = [];
 
   for (const tx of body.event.activity) {
-    const isToken = tx.category === 'token';
+    const isToken = tx.category === 'token' || tx.category === 'erc20';
     const isInternal = tx.category === 'internal';
     const isExternal = tx.category === 'external'; // Native ETH
     const isERC721 = tx.category === 'erc721' || tx.category === 'erc1155';
