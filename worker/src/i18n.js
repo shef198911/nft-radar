@@ -2,6 +2,11 @@ export const i18n = {
   ru: {
     start: "Выберите язык / Choose language:",
     main_menu: "🤖 <b>NFT Price Alert</b>\n\nОтслеживается: {tracked}\nАктивных алертов: {active}\nПоследняя проверка: {time}\n\nВыберите действие:",
+    
+    btn_refresh_floor: "🔄 Обновить Floor Price",
+    btn_edit_threshold: "✏️ Изменить порог",
+    btn_pause: "⏸ Приостановить алерт",
+    btn_resume: "▶️ Возобновить алерт",
     btn_add_collection: "➕ Добавить коллекцию",
     btn_my_collections: "📊 Мои коллекции",
     btn_active_alerts: "🔔 Активные алерты",
