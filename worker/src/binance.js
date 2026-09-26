@@ -8,12 +8,18 @@ export async function searchBinance(query, env) {
   const url = `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`;
   
   try {
-    const headers = {};
+    const headers = {
+       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    };
     if (env && env.BINANCE_API_KEY) {
       headers['X-MBX-APIKEY'] = env.BINANCE_API_KEY;
     }
     
     const res = await fetch(url, { headers });
+    console.log('[BINANCE_SEARCH]', symbol, res.status);
+    if (!res.ok) {
+       console.log(await res.text());
+    }
     if (res.ok) {
       const data = await res.json();
       return [{
@@ -37,7 +43,9 @@ export async function getBinancePrices(symbols, env) {
   const prices = {};
   
   try {
-    const headers = {};
+    const headers = {
+       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    };
     if (env && env.BINANCE_API_KEY) {
       headers['X-MBX-APIKEY'] = env.BINANCE_API_KEY;
     }
