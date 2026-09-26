@@ -1,5 +1,6 @@
 import { InlineKeyboard } from "grammy";
 import { searchGeckoTerminal } from './geckoterminal.js';
+import { searchBinance } from './binance.js';
 
 export async function setState(ctx, state, data = '{}') {
   const userId = ctx.from.id.toString();
@@ -78,7 +79,10 @@ export async function processCoinQuery(ctx, query) {
   const data = JSON.parse(ctx.user.state_data);
   const msg = await ctx.reply("⏳ Ищу токен на GeckoTerminal...");
   
-  const tokens = await searchGeckoTerminal(query);
+  let tokens = await searchBinance(query, ctx.env);
+  if (!tokens || tokens.length === 0) {
+    tokens = await searchGeckoTerminal(query);
+  }
   await ctx.api.deleteMessage(ctx.chat.id, msg.message_id);
 
   if (!tokens || tokens.length === 0) {
@@ -100,7 +104,10 @@ export async function processCoinQuery(ctx, query) {
 
 export async function handleCoinSelect(ctx, collectionId, contract) {
   // Fetch specific token
-  const tokens = await searchGeckoTerminal(contract);
+  let tokens = await searchBinance(contract, ctx.env);
+  if (!tokens || tokens.length === 0) {
+    tokens = await searchGeckoTerminal(contract);
+  }
   if (!tokens || tokens.length === 0) return await ctx.reply("❌ Ошибка получения цены токена.");
   const token = tokens[0];
 

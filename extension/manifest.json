@@ -1,22 +1,41 @@
 {
   "manifest_version": 3,
   "name": "NFT Radar",
-  "version": "1.0",
+  "version": "1.3.1",
   "description": "Automated NFT opportunity search for X",
   "icons": {
     "16": "icon.png",
     "48": "icon.png",
     "128": "icon.png"
   },
-  "permissions": ["storage", "activeTab", "scripting", "alarms"],
-  "host_permissions": ["*://x.com/*", "*://twitter.com/*", "*://translate.googleapis.com/*"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "*://x.com/*",
+    "*://twitter.com/*",
+    "*://translate.googleapis.com/*"
+  ],
   "background": {
     "service_worker": "service-worker.js"
   },
   "content_scripts": [
     {
-      "matches": ["*://x.com/*", "*://twitter.com/*"],
-      "js": ["queries.js", "filters.js", "moni-score.js", "tweet-parser.js", "content.js", "search-controller.js"],
+      "matches": [
+        "*://x.com/*",
+        "*://twitter.com/*"
+      ],
+      "js": [
+        "queries.js",
+        "filters.js",
+        "moni-score.js",
+        "tweet-parser.js",
+        "content.js",
+        "search-controller.js"
+      ],
       "run_at": "document_idle"
     }
   ],

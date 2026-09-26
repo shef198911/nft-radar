@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nft-radar",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-16",
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "triggers": {
+    "crons": [
+      "*/30 * * * *",
+      "0 18 * * *"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nft-radar-db",
+      "database_id": "a26c8371-c1ec-4257-b68e-98221c7ca192"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "vars": {
+    "HELIUS_API_KEY": "df35408d-8969-4d22-bb67-cc686c6353b5",
+    "ALCHEMY_AUTH_TOKEN": "PP6k6i0EU1Yad7BTxn3xWZY-JoYLb_6K"
+  }
+}

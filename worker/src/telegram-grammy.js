@@ -5,6 +5,7 @@ import { t } from './i18n.js';
 import { initAlchemyWebhooks, updateAlchemyAddresses } from './alchemy.js';
 
 import { getGeckoTerminalTokensByNetwork } from './geckoterminal.js';
+import { getBinancePrices } from './binance.js';
 import { 
   setState, handleProfilesHome, handleWalletHub, handleCoinHome, 
   handleCoinAdd, processCoinQuery, handleCoinSelect, saveCoinTracker, 
@@ -34,6 +35,16 @@ export async function checkCoinAlerts(env) {
   
   for (const network of Object.keys(byNetwork)) {
      const addrs = Array.from(byNetwork[network]);
+     
+     if (network === 'binance') {
+         // Fetch from Binance API
+         const binancePrices = await getBinancePrices(addrs, env);
+         for (const [symbol, price] of Object.entries(binancePrices)) {
+             currentPrices['binance_' + symbol] = price;
+         }
+         continue;
+     }
+
      // Batch into 30
      for (let i = 0; i < addrs.length; i += 30) {
         const batch = addrs.slice(i, i + 30);
@@ -56,7 +67,7 @@ export async function checkCoinAlerts(env) {
        const emoji = isUp ? '🚀' : '📉';
        const pStr = currentPrice < 0.001 ? currentPrice.toFixed(8) : currentPrice.toFixed(4);
        
-       const msg = `${emoji} <b>$${tracker.ticker}</b> (${tracker.network.toUpperCase()})\n\nЦена изменилась на <b>${Math.abs(diff).toFixed(2)}%</b>!\n\nСтарая цена: $${basePrice}\nНовая цена: $${pStr}\n\n<a href="https://geckoterminal.com/${tracker.network}/pools/${tracker.contract_address}">🔗 Открыть график GeckoTerminal</a>`;
+       const msg = `${emoji} <b>$${tracker.ticker}</b> (${tracker.network.toUpperCase()})\n\nЦена изменилась на <b>${Math.abs(diff).toFixed(2)}%</b>!\n\nСтарая цена: $${basePrice}\nНовая цена: $${pStr}\n\n${tracker.network === 'binance' ? `<a href="https://www.binance.com/en/trade/${tracker.ticker}_USDT?type=spot">🔗 Открыть график Binance</a>` : `<a href="https://geckoterminal.com/${tracker.network}/pools/${tracker.contract_address}">🔗 Открыть график GeckoTerminal</a>`}`;
        
        const chatId = tracker.target_chat_id || tracker.owner_chat_id;
        
