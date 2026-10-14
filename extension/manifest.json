@@ -10,6 +10,7 @@
   },
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "activeTab",
     "scripting",
     "alarms"
@@ -17,7 +18,9 @@
   "host_permissions": [
     "*://x.com/*",
     "*://twitter.com/*",
-    "*://translate.googleapis.com/*"
+    "*://translate.googleapis.com/*",
+    "http://*/*",
+    "https://*/*"
   ],
   "background": {
     "service_worker": "service-worker.js"

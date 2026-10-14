@@ -1,39 +1,83 @@
+function applyHeuristicSafetyNet(cfResult, text) {
+  if (!cfResult) cfResult = { relevant: false, score: 0, category: 'other' };
+  
+  const lower = (text || '').toLowerCase();
+  
+  // 1. Checkers & Airdrops
+  if (/(?<![a-zа-я0-9_])(?:checker|чекер[а-я]*|airdrop[а-я]*|аирдроп[а-я]*|claim|snapshot|снимок|eligible|eligibility)(?![a-zа-я0-9_])/iu.test(lower)) {
+    if (!cfResult.relevant || cfResult.score < 7) {
+      cfResult.relevant = true;
+      cfResult.category = 'checker';
+      cfResult.score = Math.max(cfResult.score, 9);
+      cfResult.reason = cfResult.reason || 'Heuristic: Airdrop/Checker detected';
+    }
+  }
+  // 2. Mints & Mint Countdowns (including Russian cases: минт, минта, минты, минтить)
+  else if (/(?<![a-zа-я0-9_])(?:mint(?:ing|ed|s)?|минт(?:ить|а|ы|у|ом|е)?|opensea|magic\s*eden)(?![a-zа-я0-9_])/iu.test(lower)) {
+    if (!cfResult.relevant || cfResult.score < 7) {
+      cfResult.relevant = true;
+      cfResult.category = 'mint';
+      cfResult.score = Math.max(cfResult.score, 8);
+      cfResult.reason = cfResult.reason || 'Heuristic: Mint announcement/countdown detected';
+    }
+  }
+  // 3. Whitelist / Allowlist (Strict boundaries so 'вл' never triggers on 'добавлял', 'владелец', etc.)
+  else if (/(?<![a-zа-я0-9_])(?:whitelist|allowlist|вайтлист(?:а|ы|у|ом|е)?|вл|premint|guaranteed)(?![a-zа-я0-9_])/iu.test(lower)) {
+    if (!cfResult.relevant || cfResult.score < 7) {
+      cfResult.relevant = true;
+      cfResult.category = 'whitelist';
+      cfResult.score = Math.max(cfResult.score, 8);
+      cfResult.reason = cfResult.reason || 'Heuristic: Whitelist detected';
+    }
+  }
+  // 4. TGE & Tokenomics
+  else if (/(?<![a-zа-я0-9_])(?:tge|tokenomics|токеномик(?:а|и|у|ой|е)?|token\s*generation)(?![a-zа-я0-9_])/iu.test(lower)) {
+    if (!cfResult.relevant || cfResult.score < 7) {
+      cfResult.relevant = true;
+      cfResult.category = 'tokenomics';
+      cfResult.score = Math.max(cfResult.score, 8);
+      cfResult.reason = cfResult.reason || 'Heuristic: Tokenomics/TGE detected';
+    }
+  }
+  
+  return cfResult;
+}
+
 export async function runAIFilter(tweetText, env) {
-  const prompt = `You are an AI classifier for an exclusive "X Alpha" Crypto/Web3 Radar.
-Your task is to analyze the following tweet from a curated list of top crypto influencers and return a JSON object evaluating its "Alpha" value.
+  const prompt = `You are an AI classifier for an exclusive "X Alpha" Crypto/Web3/NFT Radar.
+Your task is to analyze the following tweet and return a JSON object evaluating its importance.
 
-Rules:
-1. Is it relevant to Web3 Alpha? (Crypto narratives, token analysis, breaking crypto news, smart money moves, altcoin setups, early project discovery, DeFi strategies, NFT mints, airdrops, security alerts, on-chain activity)
-2. Does it contain specific, valuable, or new information? (e.g., a specific project, token ticker, upcoming event, deep dive thread, analytical insight, contract, hidden gem)
-3. Reject low-effort engagement bait and pure noise. (e.g. "what do you think?", GM/GN, empty giveaways, simple retweets without added value)
+IMPORTANT CATEGORIES:
+- "mint": Any NFT or token mint announcement, mint date, mint countdown ("48 hours until mint", "October 14", "coming to opensea"), supply info, mint phase, leaderboard lock for mint.
+- "airdrop": Airdrop announcement, airdrop claim, distribution date, snapshot date, eligibility criteria.
+- "checker": Eligibility/airdrop checker link or announcement.
+- "whitelist": Whitelist/allowlist spots, registration, raffle, premint, form.
+- "tge": Token Generation Event, token launch date, listing.
+- "tokenomics": Tokenomics details, token distribution breakdown.
+- "testnet" / "mainnet": Testnet or mainnet launch, incentivized testnet.
+- "security": Exploit, hack, contract compromise, emergency warning.
 
-Scoring system (sum up the points, minimum 3 points needed to pass):
-+5: Major breaking news, critical security alert, exploit, or highly actionable early alpha
-+4: Deep dive thread, analytical insight, tokenomics breakdown, or smart money tracking
-+3: Specific project launch, token listing, testnet/mainnet launch, airdrop eligibility, snapshot
-+3: Specific altcoin setup, DeFi strategy, or yield farming opportunity
-+3: New NFT mint, whitelist, allowlist, or claim info
-+2: Mentions a specific token ticker, contract address, or specific date
-+2: Funding news, partnerships, or integrations
-+1: General crypto ecosystem updates or rewards
+SCORING (0 to 10):
+10: Official mint date, mint countdown, airdrop checker, airdrop claim, TGE date, critical security warning.
+8-9: Whitelist open, testnet/mainnet launch, tokenomics release, snapshot announcement.
+7: Upcoming mint details, supply/price details, leaderboard closing for mint access.
+0-4: Casual chatter, memes, greetings (gm/gn), trading advice ("don't fomo"), generic opinions without dates or actions.
 
-Penalties:
--10: Giveaway, referral link, affiliate code
--5: Engagement bait ("drop your wallet", "who is bullish?")
--3: Pure meme or empty opinion without facts
--3: Casual conversation, GM/GN
+CRITICAL RULES:
+- If a tweet announces an upcoming MINT, MINT DATE, or MINT COUNTDOWN (e.g. "48 hours until the mint", "coming to OpenSea October 14"), it is ALWAYS relevant=true, category="mint", and score=8 to 10!
+- Even if the tone is promotional or exciting, DO NOT reject official mint announcements, dates, or countdowns!
 
 JSON Schema:
 {
   "relevant": boolean,
-  "category": "alpha" | "news" | "analysis" | "defi" | "nft" | "mint" | "airdrop" | "testnet" | "launch" | "token" | "security" | "onchain" | "other",
+  "category": "mint" | "airdrop" | "checker" | "whitelist" | "tge" | "tokenomics" | "testnet" | "mainnet" | "security" | "other",
   "actionable": boolean,
   "new_information": boolean,
   "promotional": boolean,
   "engagement_bait": boolean,
   "score": number,
   "reason": "short explanation",
-  "translated_text": "полный и точный перевод текста твита на русский язык (сохраняйте все термины, тикеры и сленг)"
+  "translated_text": "ignore this field, leave empty"
 }
 
 Tweet to analyze:
@@ -42,115 +86,64 @@ ${tweetText}
 """
 `;
 
-  let useCloudflare = false;
-  let geminiResult = null;
+  try {
+    const res = await fetch("https://cloudflare-ai-proxy.icoshef.workers.dev/?key=radar_secret_key_123", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: prompt, model: "@cf/meta/llama-3.2-3b-instruct" })
+    });
 
-  if (!env.GEMINI_API_KEY) {
-    console.warn("[AI] GEMINI_API_KEY is missing. Trying Cloudflare AI");
-    useCloudflare = true;
-  } else {
-    try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: "application/json", temperature: 0.0 }
-        })
-      });
-
-      if (!res.ok) {
-        if (res.status === 429) {
-          console.warn("[AI] Gemini HTTP 429, trying Cloudflare AI");
-        } else {
-          console.warn(`[AI] Gemini failed (${res.status}), trying Cloudflare AI`);
-        }
-        useCloudflare = true;
-      } else {
-        const data = await res.json();
-        const text = data.candidates[0].content.parts[0].text;
-        geminiResult = JSON.parse(text);
-
-        if (typeof geminiResult !== 'object' || geminiResult === null) {
-          console.warn("[AI] Gemini invalid JSON, trying Cloudflare AI");
-          useCloudflare = true;
-          geminiResult = null;
-        } else {
-          geminiResult.relevant = !!geminiResult.relevant;
-          geminiResult.new_information = !!geminiResult.new_information;
-          geminiResult.actionable = !!geminiResult.actionable;
-          geminiResult.promotional = !!geminiResult.promotional;
-          geminiResult.engagement_bait = !!geminiResult.engagement_bait;
-          geminiResult.score = Number(geminiResult.score) || 0;
-          geminiResult.category = String(geminiResult.category || 'other');
-          geminiResult.reason = String(geminiResult.reason || '');
-          if (geminiResult.translated_text) geminiResult.translated_text = String(geminiResult.translated_text);
-
-          console.log("[AI] Gemini classification success");
-          return geminiResult;
-        }
-      }
-    } catch (error) {
-      console.error("[AI] Error calling Gemini classifier", error);
-      console.warn("[AI] Gemini failed, trying Cloudflare AI");
-      useCloudflare = true;
+    if (!res.ok) {
+      console.warn("[AI] Cloudflare Proxy failed with status", res.status);
+      return applyHeuristicSafetyNet(null, tweetText);
     }
-  }
 
-  if (useCloudflare) {
+    const aiRes = await res.json();
+    let textResult = '';
+    if (aiRes.response) {
+      textResult = typeof aiRes.response === 'string' ? aiRes.response : JSON.stringify(aiRes.response);
+    } else if (aiRes.choices && aiRes.choices[0] && aiRes.choices[0].message) {
+      textResult = String(aiRes.choices[0].message.content);
+    }
+    
+    // Parse the JSON blocks
+    let jsonStr = textResult;
+    const match = textResult.match(/```(?:json)?\n([\s\S]*?)\n```/);
+    if (match) {
+      jsonStr = match[1];
+    } else {
+      const start = textResult.indexOf('{');
+      const end = textResult.lastIndexOf('}');
+      if (start !== -1 && end !== -1 && end >= start) {
+        jsonStr = textResult.substring(start, end + 1);
+      }
+    }
+
     try {
-      if (!env.AI) {
-        console.error("[AI] Cloudflare AI binding (env.AI) is missing.");
-        console.error("[AI] Gemini + Cloudflare failed, rejecting tweet");
-        return null;
-      }
-
-      const res = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-        messages: [
-          { role: 'system', content: prompt }
-        ]
-      });
-
-      const text = res.response;
-      let jsonStr = text;
-      const match = text.match(/```(?:json)?\n([\s\S]*?)\n```/);
-      if (match) {
-        jsonStr = match[1];
-      } else {
-        const start = text.indexOf('{');
-        const end = text.lastIndexOf('}');
-        if (start !== -1 && end !== -1 && end >= start) {
-          jsonStr = text.substring(start, end + 1);
-        }
-      }
-
       const cfResult = JSON.parse(jsonStr);
-      
-      if (typeof cfResult !== 'object' || cfResult === null) {
-        console.warn("[AI] Cloudflare malformed JSON");
-        console.error("[AI] Gemini + Cloudflare failed, rejecting tweet");
-        return null;
+      if (typeof cfResult === 'object' && cfResult !== null) {
+        cfResult.relevant = !!cfResult.relevant;
+        cfResult.new_information = !!cfResult.new_information;
+        cfResult.actionable = !!cfResult.actionable;
+        cfResult.promotional = !!cfResult.promotional;
+        cfResult.engagement_bait = !!cfResult.engagement_bait;
+        cfResult.score = Number(cfResult.score) || 0;
+        cfResult.category = String(cfResult.category || 'other');
+        cfResult.reason = String(cfResult.reason || '');
+        if (cfResult.translated_text) cfResult.translated_text = String(cfResult.translated_text);
+
+        // Apply heuristic safety net to prevent false negative drops
+        applyHeuristicSafetyNet(cfResult, tweetText);
+
+        console.log("[AI] Cloudflare classification success. Result:", cfResult.category, "score:", cfResult.score);
+        return cfResult;
       }
-
-      cfResult.relevant = !!cfResult.relevant;
-      cfResult.new_information = !!cfResult.new_information;
-      cfResult.actionable = !!cfResult.actionable;
-      cfResult.promotional = !!cfResult.promotional;
-      cfResult.engagement_bait = !!cfResult.engagement_bait;
-      cfResult.score = Number(cfResult.score) || 0;
-      cfResult.category = String(cfResult.category || 'other');
-      cfResult.reason = String(cfResult.reason || '');
-      if (cfResult.translated_text) cfResult.translated_text = String(cfResult.translated_text);
-
-      console.log("[AI] Cloudflare classification success");
-      return cfResult;
-
-    } catch (error) {
-      console.error("[AI] Error calling Cloudflare AI classifier", error);
-      console.error("[AI] Gemini + Cloudflare failed, rejecting tweet");
-      return null;
+    } catch(e) {
+      console.error("[AI] Failed to parse Cloudflare JSON:", textResult);
     }
+    return applyHeuristicSafetyNet(null, tweetText);
+  } catch (e) {
+    console.error("[AI] Cloudflare Proxy error:", e.message);
+    return applyHeuristicSafetyNet(null, tweetText);
   }
-
-  return null;
 }

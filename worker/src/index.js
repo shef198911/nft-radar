@@ -30,75 +30,15 @@ const router = Router();
 
 router.post('/helius/webhook', async (request, env) => {
   try {
-    let payloads = await request.json();
-    if (!Array.isArray(payloads)) payloads = [payloads];
-
-    for (const tx of payloads) {
-      const sig = tx.signature;
-      
-      // Check cache
-      const cached = await env.DB.prepare('SELECT signature FROM solana_tx_cache WHERE signature = ?').bind(sig).first();
-      if (cached) continue;
-
-      // Classify
-      // First, get all tracked wallets
-      const { results: wallets } = await env.DB.prepare('SELECT id, chat_id, address, name FROM solana_wallets').all();
-      if (!wallets || wallets.length === 0) continue;
-
-      let matchedWallet = null;
-      for (const w of wallets) {
-        if (
-           tx.feePayer === w.address || 
-           (tx.nativeTransfers && tx.nativeTransfers.some(t => t.toUserAccount === w.address || t.fromUserAccount === w.address)) ||
-           (tx.tokenTransfers && tx.tokenTransfers.some(t => t.toUserAccount === w.address || t.fromUserAccount === w.address)) ||
-           (tx.accountData && tx.accountData.some(a => a.account === w.address))
-        ) {
-          matchedWallet = w;
-          break;
-        }
-      }
-
-      if (!matchedWallet) {
-        await env.DB.prepare('INSERT INTO solana_tx_cache (signature, created_at) VALUES (?, ?)').bind(sig, new Date().toISOString()).run();
-        continue;
-      }
-
-      const parsed = parseTransaction(tx, matchedWallet.address);
-      const filters = await env.DB.prepare('SELECT * FROM solana_filters WHERE wallet_id = ?').bind(matchedWallet.id).first();
-      
-      let shouldSend = false;
-      if (filters) {
-        if (parsed.category === 'swap' && filters.notify_swap) shouldSend = true;
-        if (parsed.category === 'transfer' && filters.notify_transfer) shouldSend = true;
-        if (parsed.category === 'nft' && filters.notify_nft) shouldSend = true;
-        if (parsed.category === 'mint' && filters.notify_mint) shouldSend = true;
-        if (parsed.category === 'stake' && filters.notify_stake) shouldSend = true;
-        if (parsed.category === 'other' && filters.notify_other) shouldSend = true;
-      } else {
-        shouldSend = true; // default
-      }
-
-      if (shouldSend) {
-        const msg = `👛 <b>${matchedWallet.name}</b>\n\n${parsed.formatted}`;
-        await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: matchedWallet.chat_id,
-            text: msg,
-            parse_mode: 'HTML',
-            disable_web_page_preview: true,
-            reply_markup: { inline_keyboard: [[{ text: "👛 Открыть кошелёк", url: `https://solscan.io/account/${matchedWallet.address}` }]] }
-          })
-        });
-      }
-
-      await env.DB.prepare('INSERT INTO solana_tx_cache (signature, created_at) VALUES (?, ?)').bind(sig, new Date().toISOString()).run();
-    }
-    return new Response('OK');
+    const rawBody = await request.text();
+    const res = await fetch('http://45.158.185.9:3000/helius/webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: rawBody
+    });
+    return new Response(await res.text(), { status: res.status });
   } catch (e) {
-    console.error('Webhook error:', e);
-    return new Response('Error', { status: 500 });
+    return new Response(e.message, { status: 500 });
   }
 });
 
@@ -153,21 +93,52 @@ function validateTweetUrl(value) {
   }
 }
 
+function isChannelTarget(target) {
+  if (!target) return false;
+  const chatId = String(target.chatId || target.chat_id || '');
+  const name = String(target.name || '').toLowerCase();
+  const type = String(target.type || '').toLowerCase();
+
+  // Known Channel Chat IDs
+  if (chatId === '-1004469660618' || chatId === '-1002446777618') return true;
+
+  // Known Group or Admin Chat IDs
+  if (chatId === '-1001270981759' || chatId === '-1002241604169' || chatId === '332680373') return false;
+
+  // Group topics have a threadId; channels never have threadId
+  if (target.threadId || target.thread_id) return false;
+
+  // Explicit name or type checks
+  if (name === 'channel' || type === 'channel') return true;
+  if (name === 'group' || name === 'admin' || type === 'group' || type === 'supergroup') return false;
+
+  return name.includes('channel');
+}
+
 function getTelegramTargets(env, isXList = false) {
-  const targetsConfig = env.TELEGRAM_TARGETS_PRIVATE || env.TELEGRAM_TARGETS;
+  let targetsConfig = env.TELEGRAM_TARGETS_PRIVATE || env.TELEGRAM_TARGETS;
+  if (typeof targetsConfig === 'string' && targetsConfig.trim() === '0') {
+    targetsConfig = env.TELEGRAM_TARGETS;
+  }
   if (targetsConfig) {
     try {
       const targets = JSON.parse(targetsConfig);
       if (Array.isArray(targets)) {
         return targets
           .map((target) => {
-            const chatId = target.chat_id || target.chatId;
+            const chatId = String(target.chat_id || target.chatId || '');
             let threadId = target.thread_id || target.threadId || null;
-            if (threadId && isXList) {
-              threadId = 346298; // Special topic for X List
+            if (chatId === '-1001270981759' || target.name === 'group') {
+              if (isXList) {
+                threadId = 346298; // Special topic for X List
+              } else {
+                threadId = 346199; // Nft Radar X topic
+              }
+            } else if (chatId === '-1004469660618' || target.name === 'channel') {
+              threadId = null;
             }
             return {
-              name: target.name || target.chat_id || target.chatId || 'telegram',
+              name: target.name || (chatId === '-1004469660618' ? 'channel' : (chatId === '-1001270981759' ? 'group' : (chatId === '332680373' ? 'admin' : chatId))),
               chatId,
               threadId
             };
@@ -201,19 +172,48 @@ async function sendTelegramBroadcast(env, messages, replyMarkup, isXList = false
 
   const results = [];
   for (const target of targets) {
-    const isChannel = !target.threadId;
-    let messageBody = typeof messages === 'string' ? messages : (isChannel ? messages.en : messages.ru);
-    if (!messageBody) messageBody = typeof messages === 'string' ? messages : messages.ru;
+    const isChannel = isChannelTarget(target);
+    
+    // Channel ALWAYS receives 100% English (messages.en)
+    // Group and all topics/threads in the group ALWAYS receive 100% Russian (messages.ru)
+    let messageBody = '';
+    if (typeof messages === 'string') {
+      if (isChannel && /[а-яА-ЯёЁ]/.test(messages)) {
+        console.warn(`[BROADCAST] Suppressed Russian string message for English broadcast channel ${target.chatId}`);
+        continue;
+      }
+      messageBody = messages;
+    } else if (messages && typeof messages === 'object') {
+      if (isChannel) {
+        messageBody = messages.en || '';
+      } else {
+        messageBody = messages.ru || messages.en || '';
+      }
+    }
+
+    if (!messageBody || !messageBody.trim()) {
+      console.warn(`[BROADCAST] Empty message for target ${target.name} (${target.chatId}, isChannel: ${isChannel}), skipping`);
+      continue;
+    }
+
+    let targetMarkup = null;
+    if (replyMarkup && typeof replyMarkup === 'object') {
+      if (replyMarkup.ru || replyMarkup.en) {
+        targetMarkup = isChannel ? (replyMarkup.en || null) : (replyMarkup.ru || null);
+      } else {
+        targetMarkup = replyMarkup;
+      }
+    }
 
     const result = await sendTelegramMessage(
       env.TELEGRAM_BOT_TOKEN,
       target.chatId,
       messageBody,
-      replyMarkup,
-      target.threadId
+      targetMarkup,
+      isChannel ? null : target.threadId // Channel NEVER receives threadId
     );
     if (!result.ok) {
-      console.error(`Telegram target failed: ${target.name}`, result.error || 'unknown_error');
+      console.error(`Telegram target failed: ${target.name} (${target.chatId})`, result.error || 'unknown_error');
     }
     results.push({ ...result, name: target.name });
   }
@@ -550,7 +550,8 @@ router.post('/ingest', async (request, env) => {
              };
              if (messages.ru && messages.en) {
                 const replyMarkup = {
-                  inline_keyboard: [[{ text: 'Open Tweet', url: payload.tweet_url }]]
+                  ru: { inline_keyboard: [[{ text: '🚨 Открыть твит', url: payload.tweet_url }]] },
+                  en: { inline_keyboard: [[{ text: '🚨 Open Tweet', url: payload.tweet_url }]] }
                 };
                 const tgRes = await sendTelegramBroadcast(env, messages, replyMarkup, !!payload.is_x_list);
                 if (tgRes.ok) await markSent(env.DB, payload.tweet_id, formatTelegramMessageIds(tgRes.results));
@@ -609,7 +610,8 @@ router.post('/ingest', async (request, env) => {
     };
     if (messages.ru && messages.en) {
       const replyMarkup = {
-        inline_keyboard: [[{ text: 'Open Tweet', url: scored.tweet_url }]]
+        ru: { inline_keyboard: [[{ text: '🚨 Открыть твит', url: scored.tweet_url }]] },
+        en: { inline_keyboard: [[{ text: '🚨 Open Tweet', url: scored.tweet_url }]] }
       };
       const tgRes = await sendTelegramBroadcast(env, messages, replyMarkup, !!payload.is_x_list);
       if (tgRes.ok) {
@@ -726,10 +728,21 @@ const formatCrypto = (v) => {
         else if (net === 'Optimism' || net === 'Avalanche' || net === 'Robinhood') netIcon = '🔴';
         else if (net === 'BSC') netIcon = '🟡';
         else if (net === 'Ethereum' || net === 'ETH') netIcon = '<tg-emoji emoji-id="5400219289301054663">🌐</tg-emoji>';
+        let addressExplorer = `https://etherscan.io/address/${w.address}`;
+        if (net === 'Arbitrum') addressExplorer = `https://arbiscan.io/address/${w.address}`;
+        else if (net === 'Optimism') addressExplorer = `https://optimistic.etherscan.io/address/${w.address}`;
+        else if (net === 'Polygon') addressExplorer = `https://polygonscan.com/address/${w.address}`;
+        else if (net === 'Base') addressExplorer = `https://basescan.org/address/${w.address}`;
+        else if (net === 'BSC') addressExplorer = `https://bscscan.com/address/${w.address}`;
+        else if (net === 'Avalanche') addressExplorer = `https://snowtrace.io/address/${w.address}`;
+        else if (net === 'Linea') addressExplorer = `https://lineascan.build/address/${w.address}`;
+        else if (net === 'zkSync') addressExplorer = `https://explorer.zksync.io/address/${w.address}`;
+        else if (net === 'Robinhood') addressExplorer = `https://robinhoodchain.blockscout.com/address/${w.address}`;
+        else if (net === 'Scroll') addressExplorer = `https://scrollscan.com/address/${w.address}`;
         
-        let formatted = `<a href="https://etherscan.io/address/${w.address}"><b>${w.name}</b></a> · ${netIcon} <b>${net.toUpperCase()}</b>\n`;
-        
-        if (isMultiple) {
+        let formatted = `<a href="${addressExplorer}"><b>${w.name}</b></a> • ${netIcon} <b>${net.toUpperCase()}</b>
+`;
+if (isMultiple) {
           formatted += `\n🔄 <b>Swap</b>\n`;
           for (const msg of myMsgs) {
             const isReceived = msg.to && msg.to.toLowerCase() === myAddr;

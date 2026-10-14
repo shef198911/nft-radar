@@ -1,4 +1,24 @@
-function passesLocalFilter(text) {
+var WHITELIST_FORM_PATTERNS = (typeof WHITELIST_FORM_PATTERNS !== 'undefined' ? WHITELIST_FORM_PATTERNS : [
+  /https?:\/\/(?:www\.)?premint\.xyz\/[^\s<>"')]+/i,
+  /https?:\/\/(?:www\.)?alphabot\.app\/[^\s<>"')]+/i,
+  /https?:\/\/(?:www\.)?heymint\.xyz\/[^\s<>"')]+/i,
+  /https?:\/\/forms\.gle\/[^\s<>"')]+/i,
+  /https?:\/\/docs\.google\.com\/forms\/[^\s<>"')]+/i,
+  /\b(?:premint\.xyz|alphabot\.app|heymint\.xyz|forms\.gle)\/[^\s<>"')]+/i,
+  /\bdocs\.google\.com\/forms\/[^\s<>"')]+/i
+]);
+
+function hasWhitelistFormUrl(text, links = []) {
+  if (text && WHITELIST_FORM_PATTERNS.some(p => p.test(text))) return true;
+  if (Array.isArray(links)) {
+    for (const l of links) {
+      if (l && WHITELIST_FORM_PATTERNS.some(p => p.test(l))) return true;
+    }
+  }
+  return false;
+}
+
+function passesLocalFilter(text, links = []) {
   if (!text) return false;
   const lowerText = text.toLowerCase();
   
@@ -12,13 +32,20 @@ function passesLocalFilter(text) {
      return false;
   }
 
+  // F11: Whitelist Form Hunter bypass:
+  // Presence of whitelist form URL in tweet text/links bypasses local reject filters & keyword requirements
+  if (hasWhitelistFormUrl(text, links)) {
+     return true;
+  }
+
   const utilityOrHolderGatePatterns = [
     /\bfree\s+mint\s+bot\b/i,
     /\bmint\s+bot\b/i,
     /\bbot\s+is\s+ready\b/i,
-    /\btesting\b[\s\S]{0,80}\bmint\b/i,
-    /\bmint\b[\s\S]{0,80}\btesting\b/i,
-    /\byou\s+need\b[\s\S]{0,80}\bnft\b/i,
+    /\btest\s+mint\s+only\b/i,
+    /\bcurrently\s+testing\s+mint\b/i,
+    /\btestnet\s+mint\b/i,
+    /\byou\s+must\s+hold\b/i,
     /\bholders?\s+only\b/i,
     /\bholders?\s+(?:will|get|can|receive|have)\b[\s\S]{0,80}\baccess\b/i,
     /\bholder\s+gated\b/i
@@ -86,4 +113,15 @@ function passesXListLocalFilter(text) {
 if (typeof window !== 'undefined') {
   window.passesLocalFilter = passesLocalFilter;
   window.passesXListLocalFilter = passesXListLocalFilter;
+  window.hasWhitelistFormUrl = hasWhitelistFormUrl;
+  window.WHITELIST_FORM_PATTERNS = WHITELIST_FORM_PATTERNS;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    passesLocalFilter,
+    passesXListLocalFilter,
+    hasWhitelistFormUrl,
+    WHITELIST_FORM_PATTERNS
+  };
 }

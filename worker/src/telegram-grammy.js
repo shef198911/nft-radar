@@ -7,7 +7,7 @@ import { initAlchemyWebhooks, updateAlchemyAddresses } from './alchemy.js';
 import { getGeckoTerminalTokensByNetwork } from './geckoterminal.js';
 import { getBinancePrices } from './binance.js';
 import { 
-  setState, handleProfilesHome, handleWalletHub, handleCoinHome, 
+  setState, handleProfilesHome, handleWalletHub, handleCoinHome, handleCoinView,
   handleCoinAdd, processCoinQuery, handleCoinSelect, saveCoinTracker, 
   handleCoinEdit, handleCoinChat 
 } from './profiles.js';
@@ -57,31 +57,54 @@ export async function checkCoinAlerts(env) {
 
   for (const tracker of trackers) {
     const currentPrice = currentPrices[tracker.network + '_' + tracker.contract_address];
-    if (!currentPrice) continue;
+    if (!currentPrice) {
+       console.log(`[ALERT DBG] No current price for ${tracker.network}_${tracker.contract_address}`);
+       continue;
+    }
     
     const basePrice = tracker.baseline_price;
     const diff = (currentPrice - basePrice) / basePrice * 100;
+    console.log(`[ALERT DBG] ${tracker.ticker}: base=${basePrice}, cur=${currentPrice}, diff=${diff}%, thr=${tracker.trigger_percent}%`);
     
     if (Math.abs(diff) >= tracker.trigger_percent) {
-       const isUp = diff > 0;
-       const emoji = isUp ? '🚀' : '📉';
-       const pStr = currentPrice < 0.001 ? currentPrice.toFixed(8) : currentPrice.toFixed(4);
-       
-       const msg = `${emoji} <b>$${tracker.ticker}</b> (${tracker.network.toUpperCase()})\n\nЦена изменилась на <b>${Math.abs(diff).toFixed(2)}%</b>!\n\nСтарая цена: $${basePrice}\nНовая цена: $${pStr}\n\n${tracker.network === 'binance' ? `<a href="https://www.binance.com/en/trade/${tracker.ticker}_USDT?type=spot">🔗 Открыть график Binance</a>` : `<a href="https://geckoterminal.com/${tracker.network}/pools/${tracker.contract_address}">🔗 Открыть график GeckoTerminal</a>`}`;
-       
-       const chatId = tracker.target_chat_id || tracker.owner_chat_id;
-       
+       const chatIds = tracker.target_chat_id 
+          ? String(tracker.target_chat_id).split(',').map(s => s.trim()).filter(Boolean) 
+          : [tracker.owner_chat_id];
+          
+       for (const chatId of chatIds) {
+           const user = await env.DB.prepare('SELECT language FROM telegram_users WHERE chat_id = ?').bind(chatId).first();
+           const lang = user?.language || 'ru';
+    
+           const isUp = diff > 0;
+           const emoji = isUp ? '🟢' : '🔻';
+           const trend = isUp ? '📈' : '📉';
+           const pStr = currentPrice < 0.001 ? currentPrice.toFixed(8) : currentPrice.toFixed(4);
+           
+           const usdDiff = Math.abs(currentPrice - basePrice);
+           const usdDiffStr = isUp ? `+$${usdDiff.toFixed(usdDiff < 0.001 ? 6 : 2)}` : `-$${usdDiff.toFixed(usdDiff < 0.001 ? 6 : 2)}`;
+           const changeStr = (isUp ? '+' : '-') + Math.abs(diff).toFixed(2);
+           const chartLink = tracker.network === 'binance' ? `<a href="https://www.binance.com/en/trade/${tracker.ticker}_USDT?type=spot">🔗 ${t(lang, 'btn_view_chart') || 'Chart'}</a>` : `<a href="https://geckoterminal.com/${tracker.network}/pools/${tracker.contract_address}">🔗 ${t(lang, 'btn_view_chart') || 'Chart'}</a>`;
+           
+           const msg = t(lang, 'coin_trigger_msg', {
+               emoji, name: `$${tracker.ticker} (${tracker.network.toUpperCase()})`, percent: changeStr,
+               usd_diff: usdDiffStr, new: `$${pStr}`, trend, chart_link: chartLink
+           });
+           
+           try {
+             await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'HTML', disable_web_page_preview: true })
+             });
+           } catch (e) {}
+       }
        try {
-         await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'HTML', disable_web_page_preview: true })
-         });
          await env.DB.prepare('UPDATE coin_trackers SET baseline_price = ? WHERE id = ?').bind(currentPrice, tracker.id).run();
        } catch (e) {}
     }
   }
 }
+let cachedEthPrice = 0;
 export async function checkPriceAlerts(env) {
   const { results: alerts } = await env.DB.prepare('SELECT * FROM price_alerts WHERE is_active = 1').all();
   if (!alerts || alerts.length === 0) return;
@@ -94,6 +117,37 @@ export async function checkPriceAlerts(env) {
     return;
   }
 
+  let globalEthPrice = cachedEthPrice;
+  try {
+    const bp = await getBinancePrices(['ETHUSDT'], env);
+    if (bp && bp['ETHUSDT']) {
+      globalEthPrice = bp['ETHUSDT'];
+      cachedEthPrice = globalEthPrice;
+    } else {
+      // Fallback to CoinGecko
+      const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
+      if (cgRes.ok) {
+        const cgData = await cgRes.json();
+        if (cgData && cgData.ethereum && cgData.ethereum.usd) {
+          globalEthPrice = cgData.ethereum.usd;
+          cachedEthPrice = globalEthPrice;
+        }
+      }
+    }
+  } catch(e) {
+    console.error('Failed to fetch global ETH price for NFTs, trying fallback...', e);
+    try {
+      const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
+      if (cgRes.ok) {
+        const cgData = await cgRes.json();
+        if (cgData && cgData.ethereum && cgData.ethereum.usd) {
+          globalEthPrice = cgData.ethereum.usd;
+          cachedEthPrice = globalEthPrice;
+        }
+      }
+    } catch (e2) {}
+  }
+
   const uniqueSlugs = [...new Set(alerts.map(a => a.collection_slug))];
   const currentPrices = {};
 
@@ -101,7 +155,14 @@ export async function checkPriceAlerts(env) {
     try {
       const stats = await fetchOpenSeaJson(`/collections/${slug}/stats`, apiKey);
       if (stats.total && typeof stats.total.floor_price === 'number') {
-         currentPrices[slug] = { floor: stats.total.floor_price };
+         currentPrices[slug] = { 
+           floor: stats.total.floor_price,
+           volume: stats.total.volume ? stats.total.volume.toFixed(2) : '0',
+           sales: stats.total.sales || 0,
+           num_owners: stats.total.num_owners || 0,
+           avg_price: stats.total.average_price ? stats.total.average_price.toFixed(4) : '0',
+           market_cap: stats.total.market_cap ? stats.total.market_cap.toFixed(2) : null
+         };
       }
     } catch (e) { }
   }
@@ -134,13 +195,26 @@ export async function checkPriceAlerts(env) {
       const user = await env.DB.prepare('SELECT language FROM telegram_users WHERE chat_id = ?').bind(alert.chat_id).first();
       const lang = user?.language || 'ru';
       const isUp = currentFloor > baseFloor;
-      const icon = isUp ? '📈' : '📉';
+      
+      const ethPrice = globalEthPrice;const usdDiff = Math.abs(currentFloor - baseFloor) * ethPrice;
+      const usdDiffStr = usdDiff > 0 ? (isUp ? `+$${usdDiff.toFixed(2)}` : `-$${usdDiff.toFixed(2)}`) : '$0.00';
+      const usdPriceStr = `$${(currentFloor * ethPrice).toFixed(2)}`;
+      
+      const emoji = isUp ? '🟢' : '🔻';
+      const trend = isUp ? '📈' : '📉';
       const changeStr = (isUp ? '+' : '-') + percentChange.toFixed(2);
       const time = new Date().toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' });
 
+      // Build extra floor info line
+      const floorExtra = [];
+      if (stats.volume && stats.volume !== '0') floorExtra.push((lang === 'ru' ? '📈 Объём: ' : '📈 Volume: ') + stats.volume + ' ETH');
+      if (stats.num_owners) floorExtra.push((lang === 'ru' ? '👥 Владельцев: ' : '👥 Owners: ') + stats.num_owners.toLocaleString());
+      if (stats.avg_price && stats.avg_price !== '0') floorExtra.push((lang === 'ru' ? '💎 Средняя: ' : '💎 Avg price: ') + stats.avg_price + ' ETH');
+      
       const msg = t(lang, 'trigger_msg', {
-        name: alert.collection_name, old: baseFloor, new: currentFloor, icon,
-        percent: changeStr, threshold: thresholdText, change24h: '0', time
+        name: alert.collection_name, old: baseFloor, new: currentFloor, emoji, trend, usd_diff: usdDiffStr,
+        usd_price: usdPriceStr, percent: changeStr, threshold: thresholdText, 
+        floor_extra: floorExtra.length > 0 ? floorExtra.join('\n') : '', time
       });
       
       const kb = new InlineKeyboard().text("👀 Открыть / Monitoring", `view_coll:${alert.id}`);
@@ -171,24 +245,27 @@ function calculateBounds(base, alert) {
   }
 }
 
-export async function handleTelegramWebhook(request, env) {
-  if (request.method !== 'POST') return new Response('OK');
-  
-  const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
+function _registerHandlers(bot, env) {
 
   bot.use(async (ctx, next) => {
-    const chatId = ctx.chat?.id?.toString();
-    if (!chatId) return await next();
-    
-    let user = await env.DB.prepare('SELECT state, state_data, language FROM telegram_users WHERE chat_id = ?').bind(chatId).first();
-    if (!user) {
-      user = { state: 'IDLE', state_data: null, language: null };
-      await env.DB.prepare('INSERT INTO telegram_users (chat_id, state, updated_at) VALUES (?, ?, ?)').bind(chatId, 'IDLE', new Date().toISOString()).run();
+    console.log('[BOT DBG] Update:', ctx.update?.update_id, ctx.message?.text || ctx.callbackQuery?.data || '?');
+    try {
+      const chatId = ctx.chat?.id?.toString();
+      if (!chatId) return await next();
+      
+      let user = await env.DB.prepare('SELECT state, state_data, language FROM telegram_users WHERE chat_id = ?').bind(chatId).first();
+      if (!user) {
+        user = { state: 'IDLE', state_data: null, language: null };
+        await env.DB.prepare('INSERT INTO telegram_users (chat_id, state, updated_at) VALUES (?, ?, ?)').bind(chatId, 'IDLE', new Date().toISOString()).run();
+      }
+      ctx.user = user;
+      ctx.lang = user.language || 'ru';
+      ctx.env = env;
+      return await next();
+    } catch(e) {
+      console.error('[BOT DBG] MW error:', e);
+      throw e;
     }
-    ctx.user = user;
-    ctx.lang = user.language || 'ru';
-    ctx.env = env;
-    return await next();
   });
 
   const setState = async (ctx, state, state_data = null) => {
@@ -301,13 +378,15 @@ bot.command(["start", "home", "cancel"], async (ctx) => {
      
      // Verify ownership
      const col = await ctx.env.DB.prepare(`
-       SELECT c.id FROM coin_collections c 
+       SELECT c.id, c.target_chat_id FROM coin_collections c 
        JOIN profiles p ON c.profile_id = p.id 
        WHERE c.id = ? AND p.chat_id = ?
      `).bind(colId, userId).first();
      
      if (col) {
-        await ctx.env.DB.prepare('UPDATE coin_collections SET target_chat_id = ? WHERE id = ?').bind(chatId, colId).run();
+        let current = col.target_chat_id ? col.target_chat_id.split(',').map(s => s.trim()).filter(Boolean) : [];
+        if (!current.includes(chatId)) current.push(chatId);
+        await ctx.env.DB.prepare('UPDATE coin_collections SET target_chat_id = ? WHERE id = ?').bind(current.join(','), colId).run();
         return await ctx.reply(`✅ Бот успешно добавлен! Коллекция токенов привязана к этому чату (ID: <code>${chatId}</code>).`, { parse_mode: 'HTML' });
      } else {
         return await ctx.reply('❌ Ошибка привязки: Вы не являетесь владельцем этой коллекции.');
@@ -334,6 +413,11 @@ bot.command(["start", "home", "cancel"], async (ctx) => {
   bot.callbackQuery("profiles_home", async (ctx) => { await handleProfilesHome(ctx); await ctx.answerCallbackQuery(); });
   bot.callbackQuery("wallet_hub", async (ctx) => { await handleWalletHub(ctx); await ctx.answerCallbackQuery(); });
   bot.callbackQuery("coin_home", async (ctx) => { await handleCoinHome(ctx); await ctx.answerCallbackQuery(); });
+  
+  bot.callbackQuery(/^coin_view:(.+)/, async (ctx) => { 
+    await handleCoinView(ctx, ctx.match[1]); 
+    await ctx.answerCallbackQuery(); 
+  });
   
   bot.callbackQuery(/^coin_add:(.+)/, async (ctx) => { 
     await handleCoinAdd(ctx, ctx.match[1]); 
@@ -381,6 +465,20 @@ bot.command(["start", "home", "cancel"], async (ctx) => {
   bot.callbackQuery(/^coin_chat:(.+)/, async (ctx) => { 
     await handleCoinChat(ctx, ctx.match[1]); 
     await ctx.answerCallbackQuery(); 
+  });
+  
+  bot.callbackQuery(/^coin_unchat:(.+)/, async (ctx) => {
+     await ctx.env.DB.prepare('UPDATE coin_collections SET target_chat_id = NULL WHERE id = ?').bind(ctx.match[1]).run();
+     await ctx.reply("❌ Чат отвязан.");
+     await handleCoinView(ctx, ctx.match[1]);
+     await ctx.answerCallbackQuery();
+  });
+  
+  bot.callbackQuery(/^coin_delcoll:(.+)/, async (ctx) => {
+     await ctx.env.DB.prepare('DELETE FROM coin_collections WHERE id = ?').bind(ctx.match[1]).run();
+     await ctx.reply("🗑 Коллекция удалена.");
+     await handleCoinHome(ctx);
+     await ctx.answerCallbackQuery();
   });
 
   bot.callbackQuery("home", async (ctx) => {
@@ -715,6 +813,11 @@ bot.command(["start", "home", "cancel"], async (ctx) => {
     const state = ctx.user.state;
     const now = new Date().toISOString();
 
+    if (text === '🚀 Start' || text === 'Start') {
+      await setState(ctx, 'IDLE');
+      return await sendHomeMenu(ctx);
+    }
+
     
     if (state === 'WAITING_PROFILE_NAME') {
       const now = new Date().toISOString();
@@ -746,13 +849,19 @@ bot.command(["start", "home", "cancel"], async (ctx) => {
       if (text === '0') {
          targetChatId = null;
          await ctx.reply("✅ Привязка к группе удалена.");
-      } else if (ctx.message.forward_from_chat) {
-         targetChatId = ctx.message.forward_from_chat.id.toString();
-      } else if (!text.startsWith('-')) {
-         return await ctx.reply("❌ Некорректный ID группы. Должен начинаться с минуса (например, -100123456789). Перешлите сообщение из группы или введите корректный ID.");
+         await ctx.env.DB.prepare('UPDATE coin_collections SET target_chat_id = ? WHERE id = ?').bind(targetChatId, data.collectionId).run();
+      } else {
+         if (ctx.message.forward_from_chat) {
+            targetChatId = ctx.message.forward_from_chat.id.toString();
+         } else if (!text.startsWith('-')) {
+            return await ctx.reply("❌ Некорректный ID группы. Должен начинаться с минуса (например, -100123456789). Перешлите сообщение из группы или введите корректный ID.");
+         }
+         const col = await ctx.env.DB.prepare('SELECT target_chat_id FROM coin_collections WHERE id = ?').bind(data.collectionId).first();
+         let current = col && col.target_chat_id ? String(col.target_chat_id).split(',').map(s => s.trim()).filter(Boolean) : [];
+         if (!current.includes(targetChatId)) current.push(targetChatId);
+         await ctx.env.DB.prepare('UPDATE coin_collections SET target_chat_id = ? WHERE id = ?').bind(current.join(','), data.collectionId).run();
       }
       
-      await ctx.env.DB.prepare('UPDATE coin_collections SET target_chat_id = ? WHERE id = ?').bind(targetChatId, data.collectionId).run();
       await setState(ctx, 'IDLE');
       if (targetChatId) await ctx.reply(`✅ Коллекция успешно привязана к чату <code>${targetChatId}</code>`, { parse_mode: 'HTML' });
       return await handleCoinHome(ctx);
@@ -841,10 +950,53 @@ bot.command(["start", "home", "cancel"], async (ctx) => {
   };
 
   bot.on("message:text", async (ctx) => {
-    if (ctx.message.text.startsWith('/')) return;
+    if (ctx.message.text.startsWith('/')) {
+       const cmd = ctx.message.text.split(' ')[0].toLowerCase().substring(1);
+       if (['start', 'home', 'cancel', 'chatid', 'stats', 'setadminmenu', 'broadcast'].includes(cmd)) return;
+       
+       if (cmd.length > 0) {
+           const { searchBinance } = await import('./binance.js');
+           const results = await searchBinance(cmd, ctx.env);
+           if (results && results.length > 0) {
+               const r = results[0];
+               const isUp = r.priceChangePercent >= 0;
+               const emoji = isUp ? '🟢' : '🔻';
+               const trend = isUp ? '📈' : '📉';
+               const changeSign = isUp ? '+' : '';
+               const usdDiffStr = isUp ? `+$${r.priceChange.toFixed(2)}` : `-$${Math.abs(r.priceChange).toFixed(2)}`;
+               const priceStr = r.priceUsd < 0.001 ? r.priceUsd.toFixed(8) : r.priceUsd.toFixed(2);
+               
+               const chartLink = `<a href="https://www.binance.com/en/trade/${r.ticker}_USDT?type=spot">🔗 ${t(ctx.lang, 'btn_view_chart') || 'Chart'}</a>`;
+               
+               const msg = t(ctx.lang, 'coin_trigger_msg', {
+                   emoji, name: `$${r.ticker} (${r.network.toUpperCase()})`, percent: `${changeSign}${r.priceChangePercent.toFixed(2)}`,
+                   usd_diff: usdDiffStr, new: `$${priceStr}`, trend, chart_link: chartLink
+               });
+               
+               return await ctx.reply(msg, { parse_mode: 'HTML', disable_web_page_preview: true });
+           } else {
+               return await ctx.reply(`❌ Токен <b>${cmd.toUpperCase()}</b> не найден на Binance.`, { parse_mode: 'HTML' });
+           }
+       }
+       return;
+    }
     await handleText(ctx);
   });
 
+}
+
+export async function startTelegramBot(env) {
+  const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
+  _registerHandlers(bot, env);
+  bot.catch((err) => console.error("Bot error:", err));
+  console.log("Starting Grammy Polling...");
+  await bot.start();
+}
+
+export async function handleTelegramWebhook(request, env) {
+  if (request.method !== 'POST') return new Response('OK');
+  const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
+  _registerHandlers(bot, env);
   const cb = webhookCallback(bot, "cloudflare-mod");
   return await cb(request);
 }

@@ -38,7 +38,7 @@ async function getMoniScore(username, tweetNode) {
      
      // 3. Structural detection for third-party badges (e.g. purple pill with "58")
      // Third-party extensions inject elements without native X 'css-...' auto-generated classes.
-     // We look for any leaf node that contains purely a number and lacks X classes.
+     // Validate that leaf digits belong to a badge/pill container or have badge-like attributes to prevent arbitrary UI numbers from poisoning the cache.
      let possibleScores = [];
      const allElements = rootNode.querySelectorAll('*');
      for (let el of allElements) {
@@ -46,7 +46,8 @@ async function getMoniScore(username, tweetNode) {
              const txt = (el.innerText || el.textContent || '').trim();
              if (/^\d{1,6}$/.test(txt)) {
                  const hasTwitterClass = Array.from(el.classList).some(c => c.startsWith('css-'));
-                 if (!hasTwitterClass) {
+                 const parentPill = el.closest('[class*="badge" i], [class*="pill" i], [class*="moni" i], [style*="border-radius"], [style*="background"]');
+                 if (!hasTwitterClass && parentPill) {
                      possibleScores.push(parseInt(txt, 10));
                  }
              }

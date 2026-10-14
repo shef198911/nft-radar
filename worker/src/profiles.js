@@ -38,13 +38,23 @@ export async function handleCoinHome(ctx) {
   const profile = await ctx.env.DB.prepare('SELECT id FROM profiles WHERE chat_id = ?').bind(userId).first();
   if (!profile) return await handleProfilesHome(ctx);
   
-  const coll = await ctx.env.DB.prepare('SELECT * FROM coin_collections WHERE profile_id = ?').bind(profile.id).first();
-  if (!coll) {
-    await setState(ctx, 'WAITING_COIN_COLLECTION_NAME', JSON.stringify({ profileId: profile.id }));
-    return await ctx.reply("🪙 У вас еще нет коллекции токенов. Отправьте мне название для коллекции (например, 'Мемкоины'):", { reply_markup: new InlineKeyboard().text("❌ Отмена", "profiles_home") });
+  const collsRes = await ctx.env.DB.prepare('SELECT * FROM coin_collections WHERE profile_id = ?').bind(profile.id).all();
+  const colls = collsRes.results || [];
+  
+  let kb = new InlineKeyboard();
+  for (const c of colls) {
+    kb.text(`📁 ${c.name}`, `coin_view:${c.id}`).row();
   }
+  kb.text("➕ Создать коллекцию", "coin_new_coll").row();
+  kb.text("🔙 В профиль", "profiles_home");
 
-  // Count tokens
+  return await ctx.reply("📊 <b>Ваши коллекции токенов:</b>", { parse_mode: 'HTML', reply_markup: kb });
+}
+
+export async function handleCoinView(ctx, collectionId) {
+  const coll = await ctx.env.DB.prepare('SELECT * FROM coin_collections WHERE id = ?').bind(collectionId).first();
+  if (!coll) return;
+
   const countRes = await ctx.env.DB.prepare('SELECT COUNT(*) as c FROM coin_trackers WHERE collection_id = ?').bind(coll.id).first();
   const tokenCount = countRes ? countRes.c : 0;
   
@@ -52,13 +62,18 @@ export async function handleCoinHome(ctx) {
     .text("➕ Добавить токен", `coin_add:${coll.id}`).row();
     
   if (tokenCount > 0) {
-    kb.text("✏️ Редактировать", `coin_edit:${coll.id}`).row();
+    kb.text("📝 Редактировать токены", `coin_edit:${coll.id}`).row();
   }
   
-  kb.text("🔗 Привязать Telegram Чат", `coin_chat:${coll.id}`).row()
-    .text("🔙 К профилю", "profiles_home");
+  if (coll.target_chat_id) {
+     kb.text("❌ Отвязать чат", `coin_unchat:${coll.id}`).row();
+  } else {
+     kb.text("💬 Привязать Telegram чат", `coin_chat:${coll.id}`).row();
+  }
+  kb.text("🗑 Удалить коллекцию", `coin_delcoll:${coll.id}`).row();
+  kb.text("🔙 К коллекциям", "coin_home");
 
-  return await ctx.reply(`🪙 <b>Коллекция:</b> ${coll.name}\nОтслеживается токенов: ${tokenCount}/10\nЧат для уведомлений: ${coll.target_chat_id ? 'Привязан ✅' : 'Только сюда 💬'}\n\nЧто делаем?`, { parse_mode: 'HTML', reply_markup: kb });
+  return await ctx.reply(`📊 <b>Коллекция:</b> ${coll.name}\nЛимит токенов: ${tokenCount}/10\nЧат уведомлений: ${coll.target_chat_id ? 'Привязан ✅' : 'Личные сообщения бота'}`, { parse_mode: 'HTML', reply_markup: kb });
 }
 
 export async function handleCoinAdd(ctx, collectionId) {
@@ -67,7 +82,7 @@ export async function handleCoinAdd(ctx, collectionId) {
   if (!isAdmin) {
     const countRes = await ctx.env.DB.prepare('SELECT COUNT(*) as c FROM coin_trackers WHERE collection_id = ?').bind(collectionId).first();
     if (countRes && countRes.c >= 10) {
-      return await ctx.reply("❌ Вы достигли лимита в 10 токенов для одной коллекции.\n\nУдалите старые токены, чтобы добавить новые.", { reply_markup: new InlineKeyboard().text("🔙 Назад", "coin_home") });
+      return await ctx.reply("❌ Вы достигли лимита в 10 токенов для одной коллекции.\n\nУдалите старые токены, чтобы добавить новые.", { reply_markup: new InlineKeyboard().text("🔙 В коллекцию", `coin_view:${collectionId}`) });
     }
   }
 
@@ -76,7 +91,9 @@ export async function handleCoinAdd(ctx, collectionId) {
 }
 
 export async function processCoinQuery(ctx, query) {
-  const data = JSON.parse(ctx.user.state_data);
+  let data = JSON.parse(ctx.user.state_data);
+    if (typeof data === 'string') data = JSON.parse(data);
+    if (typeof data === 'string') data = JSON.parse(data);
   const msg = await ctx.reply("⏳ Ищу токен на GeckoTerminal...");
   
   let tokens = await searchBinance(query, ctx.env);
@@ -94,7 +111,7 @@ export async function processCoinQuery(ctx, query) {
   
   tokens.forEach((t, index) => {
     const p = t.priceUsd ? (t.priceUsd < 0.001 ? t.priceUsd.toFixed(8) : t.priceUsd.toFixed(4)) : '0';
-    text += `${index + 1}. <b>$${t.ticker}</b> (${t.name}) на сети <b>${t.network.toUpperCase()}</b> - Цена: $${p}\n`;
+    text += `${index + 1}. <b>$${t.ticker}</b> (${t.name}) на сети <b>${(t.network || '').toUpperCase()}</b> - Цена: $${p}\n`;
     kb.text(`${index + 1}`, `coin_sel:${data.collectionId}:${t.contract_address}`).text("🔗 GeckoTerminal", `url_https://geckoterminal.com/${t.network}/${t.contract_address}`).row();
   });
   
@@ -120,11 +137,14 @@ export async function handleCoinSelect(ctx, collectionId, contract) {
     .text("✍️ Ввести вручную", "coin_pct_manual").row()
     .text("❌ Отмена", "coin_home");
     
-  return await ctx.reply(`🪙 <b>$${token.ticker}</b> на <b>${token.network.toUpperCase()}</b>\nТекущая цена: $${p}\n\nНа какое изменение цены (в %) установить триггер? Выберите из списка или введите вручную:`, { parse_mode: 'HTML', reply_markup: kb });
+  return await ctx.reply(`🪙 <b>$${token.ticker}</b> на <b>${(token.network || '').toUpperCase()}</b>\nТекущая цена: $${p}\n\nНа какое изменение цены (в %) установить триггер? Выберите из списка или введите вручную:`, { parse_mode: 'HTML', reply_markup: kb });
 }
 
 export async function saveCoinTracker(ctx, percentStr) {
-  const data = JSON.parse(ctx.user.state_data);
+  console.log("saveCoinTracker called with", percentStr, "state_data:", ctx.user.state_data);
+  let data = JSON.parse(ctx.user.state_data);
+  if (typeof data === 'string') data = JSON.parse(data);
+  if (typeof data === 'string') data = JSON.parse(data);
   const pct = parseFloat(percentStr);
   if (isNaN(pct) || pct <= 0) return await ctx.reply("❌ Некорректный процент.");
   
@@ -133,22 +153,22 @@ export async function saveCoinTracker(ctx, percentStr) {
     .bind(data.collectionId, data.contract, data.network, data.ticker, data.price, pct, now).run();
     
   await setState(ctx, 'IDLE');
-  return await ctx.reply(`✅ <b>Токен $${data.ticker} добавлен!</b>\n\nТриггер: ${pct}%\nБазовая цена: $${data.price}`, { parse_mode: 'HTML', reply_markup: new InlineKeyboard().text("🔙 В меню коллекции", "coin_home") });
+  return await ctx.reply(`✅ <b>Токен $${data.ticker} добавлен!</b>\n\nТриггер: ${pct}%\nБазовая цена: $${data.price}`, { parse_mode: 'HTML', reply_markup: new InlineKeyboard().text("🔙 В коллекцию", `coin_view:${data.collectionId}`) });
 }
 
 export async function handleCoinEdit(ctx, collectionId) {
   const { results: trackers } = await ctx.env.DB.prepare('SELECT * FROM coin_trackers WHERE collection_id = ?').bind(collectionId).all();
-  if (!trackers || trackers.length === 0) return await ctx.reply("❌ В коллекции нет токенов.", { reply_markup: new InlineKeyboard().text("🔙 Назад", "coin_home") });
+  if (!trackers || trackers.length === 0) return await ctx.reply("❌ В коллекции нет токенов.", { reply_markup: new InlineKeyboard().text("🔙 В коллекцию", `coin_view:${collectionId}`) });
   
   for (const t of trackers) {
     const kb = new InlineKeyboard()
       .text("✏️ Изменить %", `coin_edit_pct:${t.id}`)
       .text("🗑 Удалить", `coin_del:${t.id}`);
     
-    await ctx.reply(`🪙 <b>$${t.ticker}</b> (${t.network.toUpperCase()})\nБаза: $${t.baseline_price} | Триггер: ${t.trigger_percent}%`, { parse_mode: 'HTML', reply_markup: kb });
+    await ctx.reply(`🪙 <b>$${t.ticker}</b> (${(t.network || '').toUpperCase()})\nБаза: $${t.baseline_price} | Триггер: ${t.trigger_percent}%`, { parse_mode: 'HTML', reply_markup: kb });
   }
   
-  return await ctx.reply("Выберите действие с токенами выше 👆", { reply_markup: new InlineKeyboard().text("🔙 Назад", "coin_home") });
+  return await ctx.reply("Выберите действие с токенами выше 👆", { reply_markup: new InlineKeyboard().text("🔙 В коллекцию", `coin_view:${collectionId}`) });
 }
 
 export async function handleCoinChat(ctx, collectionId) {

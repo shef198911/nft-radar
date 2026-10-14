@@ -32,8 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const settings = {
       workerUrl: workerUrlInput.value.trim(),
       clientKey: clientKeyInput.value.trim(),
-      scanInterval: parseInt(scanIntervalInput.value, 10),
-      maxScrolls: parseInt(maxScrollsInput.value, 10),
+      scanInterval: parseInt(scanIntervalInput.value, 10) || 10,
+      maxScrolls: parseInt(maxScrollsInput.value, 10) || 15,
       pageRefreshInterval: parseInt(pageRefreshIntervalInput.value, 10) || 0,
       moniFilterEnabled: moniFilterEnabled.checked,
       moniFilterMinScore: parseInt(moniFilterMinScore.value, 10) || 0,

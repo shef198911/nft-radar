@@ -1,0 +1,2654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Coin Sonar TMA</title>
+    <script src="/tailwind.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bgMain: '#0a0d02',
+                        cardDark: '#161911',
+                        cardLighter: '#1f2316',
+                        acidGlow: '#9dcc1a', 
+                        acidBright: '#baff29',
+                        acidDim: '#4a5c0b'
+                    },
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', 'San Francisco', 'Helvetica Neue', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="/vue.global.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+
+    <style>
+        body {
+            background-image: linear-gradient(rgba(10, 13, 2, 0.4), rgba(10, 13, 2, 0.4)), url('/bg.jpg');
+            background-size: cover;
+            background-attachment: fixed;
+            background-position: center;
+            color: #ffffff;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .profile-card {
+            background: linear-gradient(160deg, rgba(31,35,22,0.9) 0%, rgba(10,13,2,0.9) 100%);
+            border-radius: 32px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        
+        .profile-card::after {
+            content: '';
+            position: absolute;
+            inset: -15px;
+            border: 35px solid transparent;
+            border-image: url('/stone_frame.png') 30% stretch;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        .pill-card {
+            background: linear-gradient(180deg, rgba(31,35,22,0.6) 0%, rgba(157,204,26,0.8) 100%);
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(157, 204, 26, 0.2);
+            transition: transform 0.2s;
+        }
+        .pill-card:active { transform: scale(0.95); }
+
+        .main-card {
+            background: linear-gradient(160deg, #1f2316 0%, #0a0d02 100%);
+            border: 1px solid rgba(255,255,255,0.05);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+
+        .list-card {
+            background: #11140d;
+            border-top-left-radius: 32px;
+            border-top-right-radius: 32px;
+        }
+
+        .nav-dock {
+            background: #050702;
+            padding-bottom: max(env(safe-area-inset-bottom), 12px);
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .chart-container {
+            background: #11140d;
+            border-radius: 24px;
+            padding: 16px;
+        }
+        
+        .tv-tooltip {
+            position: absolute;
+            display: none;
+            padding: 8px 12px;
+            z-index: 1000;
+            top: 12px;
+            left: 12px;
+            pointer-events: none;
+            background: rgba(22, 25, 17, 0.95);
+            border-radius: 12px;
+            color: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body class="antialiased selection:bg-acidBright selection:text-bgMain">
+    <div id="app" v-cloak class="pb-28">
+        <!-- TUTORIAL OVERLAY -->
+        <div v-if="isTutorial" class="fixed inset-0 bg-black/80 z-[55] transition-opacity"></div>
+
+        <!-- LANGUAGE SELECTION VIEW -->
+        <div v-if="currentView === 'lang'" class="p-4 pt-12 space-y-8 flex flex-col items-center justify-center min-h-[80vh]">
+            <div class="text-center mb-8">
+                <h1 class="font-bold text-3xl mb-2">{{t("welcome")}}</h1>
+                <p class="text-white/50 text-sm">{{t("select_lang")}}</p>
+            </div>
+            
+            <div class="w-full max-w-sm space-y-4">
+                <button class="w-full bg-white text-black font-bold text-xl py-5 rounded-[24px] shadow-lg active:scale-95 transition-transform" @click="selectLang('en')">
+                    🇺🇸 English
+                </button>
+                <button class="w-full pill-card text-bgMain font-bold text-xl py-5 rounded-[24px] shadow-lg active:scale-95 transition-transform" @click="selectLang('ru')">
+                    🇷🇺 Русский
+                </button>
+            </div>
+        </div>
+
+        
+        <!-- MAIN HOME VIEW -->
+        <div v-if="currentView === 'home'" class="p-4 pt-6 space-y-5">
+            
+            <div class="profile-card p-8 relative">
+                <div class="flex justify-between items-start mb-6">
+                    <div class="overflow-hidden">
+                        <div class="text-3xl font-bold tracking-tight mb-1 truncate">{{ userName }}</div>
+                        <div class="text-sm text-white/40 truncate">{{ tgUsername }}</div>
+                    </div>
+                    <div class="flex-shrink-0 ml-4">
+                        <img v-if="tgAvatar" :src="tgAvatar" class="w-14 h-14 rounded-full border-2 border-acidBright object-cover">
+                        <i v-else class="ph-fill ph-user-circle text-[56px] text-white/80"></i>
+                    </div>
+                </div>
+                
+                <div v-if="profileName" class="mt-4 flex items-center space-x-2">
+                    <div class="inline-flex items-center px-4 py-1.5 bg-acidBright/10 text-acidBright rounded-full text-sm font-bold border border-acidBright/20">
+                        <i class="ph-fill ph-user-circle mr-2 text-lg"></i> {{ profileName }}
+                    </div>
+                    <button @click="deleteProfile()" class="text-red-500 bg-red-500/10 hover:bg-red-500/20 p-1.5 rounded-full transition-all active:scale-90 border border-red-500/20">
+                        <i class="ph-bold ph-trash text-sm"></i>
+                    </button>
+                    <button v-if="isAdmin" @click="currentView = 'admin_panel'" class="text-acidBright bg-acidBright/10 hover:bg-acidBright/20 px-3 py-1.5 rounded-full transition-all active:scale-90 border border-acidBright/20 text-sm font-bold">
+                        Админ панель
+                    </button>
+                </div>
+                
+            </div>
+
+            <div v-if="profileName" class="grid grid-cols-2 gap-3 relative">
+                <!-- Card 1: Tokens -->
+                <div class="main-card rounded-2xl p-3 flex flex-col justify-between active:scale-95 transition-transform cursor-pointer relative" :style="isTutorial && tutorialStep === 1 ? 'z-index: 60' : ''" @click="if(isTutorial) return; currentView = 'collections'">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="w-8 h-8 rounded-full bg-acidBright/10 flex items-center justify-center">
+                            <i class="ph-fill ph-coins text-acidBright text-lg"></i>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <div class="text-acidBright font-bold text-sm">{{ trackedCoins.length }} <span class="text-white/30 text-xs font-normal">/ 12</span></div>
+                            <i class="ph-bold ph-plus text-acidBright text-xs"></i>
+                        </div>
+                    </div>
+                    <div class="font-bold text-sm mb-2 capitalize">{{ t("tokens") }}</div>
+                    <div class="w-full bg-[#0a0d02] rounded-full h-1.5 relative overflow-hidden">
+                        <div class="absolute inset-y-0 left-0 bg-acidBright rounded-full" :style="{ width: Math.min((trackedCoins.length / 12) * 100, 100) + '%' }"></div>
+                    </div>
+                    <!-- Bubble 1 -->
+                    <div v-if="isTutorial && tutorialStep === 1" class="absolute -bottom-[110px] left-1/2 -translate-x-1/2 w-[220px] bg-white text-black p-3 rounded-2xl text-xs font-bold shadow-[0_10px_40px_rgba(0,0,0,0.8)] z-[70] cursor-default" @click.stop>
+                        {{t("tut_create_coll")}}
+                        <div class="flex justify-between items-center mt-3">
+                            <button @click="skipTutorial" class="text-black/50 underline">{{t("tut_skip")}}</button>
+                            <button @click="nextTutorialStep" class="bg-acidBright text-black px-4 py-1.5 rounded-full">{{t("tut_next")}}</button>
+                        </div>
+                        <div class="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-r-[8px] border-b-[8px] border-l-transparent border-r-transparent border-b-white"></div>
+                    </div>
+                </div>
+
+                <!-- Card 2: NFTs -->
+                <div class="main-card rounded-2xl p-3 flex flex-col justify-between active:scale-95 transition-transform cursor-pointer relative" :style="isTutorial && tutorialStep === 2 ? 'z-index: 60' : ''" @click="if(isTutorial) return; currentView = 'nfts'">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="w-8 h-8 rounded-full bg-acidBright/10 flex items-center justify-center">
+                            <i class="ph-fill ph-image text-acidBright text-lg"></i>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <div class="text-acidBright font-bold text-sm">{{ trackedNFTs.length }} <span class="text-white/30 text-xs font-normal">/ 12</span></div>
+                            <i class="ph-bold ph-plus text-acidBright text-xs"></i>
+                        </div>
+                    </div>
+                    <div class="font-bold text-sm mb-2 uppercase">{{ t("nfts") }}</div>
+                    <div class="w-full bg-[#0a0d02] rounded-full h-1.5 relative overflow-hidden">
+                        <div class="absolute inset-y-0 left-0 bg-acidBright rounded-full" :style="{ width: Math.min((trackedNFTs.length / 12) * 100, 100) + '%' }"></div>
+                    </div>
+                    <!-- Bubble 2 -->
+                    <div v-if="isTutorial && tutorialStep === 2" class="absolute -bottom-[110px] left-1/2 -translate-x-1/2 w-[220px] bg-white text-black p-3 rounded-2xl text-xs font-bold shadow-[0_10px_40px_rgba(0,0,0,0.8)] z-[70] cursor-default" @click.stop>
+                        {{t("tut_add_nft")}}
+                        <div class="flex justify-between items-center mt-3">
+                            <button @click="skipTutorial" class="text-black/50 underline">{{t("tut_skip")}}</button>
+                            <button @click="nextTutorialStep" class="bg-acidBright text-black px-4 py-1.5 rounded-full">{{t("tut_next")}}</button>
+                        </div>
+                        <div class="absolute -top-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-r-[8px] border-b-[8px] border-l-transparent border-r-transparent border-b-white"></div>
+                    </div>
+                </div>
+
+                <!-- Card 3: EVM -->
+                <div class="main-card rounded-2xl p-3 flex flex-col justify-between active:scale-95 transition-transform cursor-pointer relative" :style="isTutorial && tutorialStep === 3 ? 'z-index: 60' : ''" @click="if(isTutorial) return; currentView = 'evm'">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="w-8 h-8 rounded-full bg-acidBright/10 flex items-center justify-center">
+                            <i class="ph-fill ph-wallet text-acidBright text-lg"></i>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <div class="text-acidBright font-bold text-sm">{{ evmWallets.length }} <span class="text-white/30 text-xs font-normal">/ 12</span></div>
+                            <i class="ph-bold ph-plus text-acidBright text-xs"></i>
+                        </div>
+                    </div>
+                    <div class="font-bold text-sm mb-2">{{t('evm_wallets')}}</div>
+                    <div class="w-full bg-[#0a0d02] rounded-full h-1.5 relative overflow-hidden">
+                        <div class="absolute inset-y-0 left-0 bg-acidBright rounded-full" :style="{ width: Math.min((evmWallets.length / 12) * 100, 100) + '%' }"></div>
+                    </div>
+                    <!-- Bubble 3 -->
+                    <div v-if="isTutorial && tutorialStep === 3" class="absolute -top-[110px] left-1/2 -translate-x-1/2 w-[220px] bg-white text-black p-3 rounded-2xl text-xs font-bold shadow-[0_10px_40px_rgba(0,0,0,0.8)] z-[70] cursor-default" @click.stop>
+                        {{t("tut_track_evm")}}
+                        <div class="flex justify-between items-center mt-3">
+                            <button @click="skipTutorial" class="text-black/50 underline">{{t("tut_skip")}}</button>
+                            <button @click="nextTutorialStep" class="bg-acidBright text-black px-4 py-1.5 rounded-full">{{t("tut_next")}}</button>
+                        </div>
+                        <div class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-r-[8px] border-t-[8px] border-l-transparent border-r-transparent border-t-white"></div>
+                    </div>
+                </div>
+
+                <!-- Card 4: Solana -->
+                <div class="main-card rounded-2xl p-3 flex flex-col justify-between active:scale-95 transition-transform cursor-pointer relative" :style="isTutorial && tutorialStep === 4 ? 'z-index: 60' : ''" @click="if(isTutorial) return; currentView = 'solana'">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="w-8 h-8 rounded-full bg-acidBright/10 flex items-center justify-center">
+                            <i class="ph-fill ph-wallet text-acidBright text-lg"></i>
+                        </div>
+                        <div class="flex items-center space-x-1">
+                            <div class="text-acidBright font-bold text-sm">{{ solWallets.length }} <span class="text-white/30 text-xs font-normal">/ 12</span></div>
+                            <i class="ph-bold ph-plus text-acidBright text-xs"></i>
+                        </div>
+                    </div>
+                    <div class="font-bold text-sm mb-2">{{t('solana_wallets')}}</div>
+                    <div class="w-full bg-[#0a0d02] rounded-full h-1.5 relative overflow-hidden">
+                        <div class="absolute inset-y-0 left-0 bg-acidBright rounded-full" :style="{ width: Math.min((solWallets.length / 12) * 100, 100) + '%' }"></div>
+                    </div>
+                    <!-- Bubble 4 -->
+                    <div v-if="isTutorial && tutorialStep === 4" class="absolute -top-[110px] left-1/2 -translate-x-1/2 w-[220px] bg-white text-black p-3 rounded-2xl text-xs font-bold shadow-[0_10px_40px_rgba(0,0,0,0.8)] z-[70] cursor-default" @click.stop>
+                        {{t("tut_track_solana")}}
+                        <div class="flex justify-between items-center mt-3">
+                            <button @click="skipTutorial" class="text-black/50 underline">{{t("tut_skip")}}</button>
+                            <button @click="skipTutorial" class="bg-acidBright text-black px-4 py-1.5 rounded-full">{{t("tut_finish")}}</button>
+                        </div>
+                        <div class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-r-[8px] border-t-[8px] border-l-transparent border-r-transparent border-t-white"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else class="main-card rounded-2xl p-6 text-center mt-6">
+                <i class="ph-fill ph-user-circle-plus text-5xl text-acidBright mb-4 opacity-80"></i>
+                <div class="text-white text-lg font-bold mb-2">{{t("create_profile")}}</div>
+                <div class="text-white/50 text-sm mb-6">{{t("create_profile_desc")}}</div>
+                <button @click="createProfile()" class="w-full bg-white text-black font-bold text-xl py-4 rounded-full shadow-lg active:scale-95 transition-transform">
+                    {{t("create_profile_btn")}}
+                </button>
+            </div>
+
+            <!-- CALENDAR TEASER CARD -->
+            <div v-if="profileName" class="main-card rounded-2xl p-4 flex items-center justify-between border border-acidBright/20 bg-gradient-to-r from-[#1f2316] to-[#0a0d02] shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-acidBright/10 flex items-center justify-center border border-acidBright/20">
+                        <i class="ph-fill ph-calendar text-acidBright text-2xl drop-shadow-[0_0_8px_rgba(186,255,41,0.5)]"></i>
+                    </div>
+                    <div>
+                        <div class="font-bold text-sm text-white flex items-center space-x-2">
+                            <span>📅 {{ t("calendar_events") }}</span>
+                            <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-acidBright/20 text-acidBright border border-acidBright/30">
+                                {{ calendarEvents.length }}
+                            </span>
+                        </div>
+                        <div class="text-xs text-white/50">{{ t("calendar_desc") }}</div>
+                    </div>
+                </div>
+                <button @click="currentView = 'calendar'" class="bg-acidBright hover:bg-acidBright/90 text-black text-xs font-bold px-4 py-2 rounded-xl transition-all active:scale-95 shadow-[0_0_12px_rgba(186,255,41,0.3)]">
+                    {{ t("view") }}
+                </button>
+            </div>
+
+            <!-- TRACKED X PROFILES CARD (Unified Multi-tenant Watcher) -->
+            <div v-if="profileName" class="main-card rounded-2xl p-4 space-y-3 border border-white/5 bg-[#1f2316] shadow-lg">
+                <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                    <div class="flex items-center space-x-2.5">
+                        <div class="w-8 h-8 rounded-xl bg-acidBright/10 flex items-center justify-center border border-acidBright/20 text-acidBright">
+                            <i class="ph-bold ph-x-logo text-base"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-sm text-white flex items-center space-x-1.5">
+                                <span>Отслеживание профилей Х</span>
+                            </h3>
+                            <div class="flex items-center space-x-2 mt-0.5">
+                                <template v-if="isAdmin">
+                                    <span class="text-[11px] font-mono text-acidBright font-bold">{{ userTrackedProfiles.length }} профилей</span>
+                                    <span class="text-[10px] bg-acidBright/20 text-acidBright border border-acidBright/30 px-1.5 py-0.2 rounded-full font-bold">
+                                        👑 Безлимит (Админ)
+                                    </span>
+                                </template>
+                                <template v-else>
+                                    <span class="text-[11px] font-mono text-acidBright font-bold">{{ userTrackedProfiles.length }}/5 профилей</span>
+                                    <span v-if="userTrackedProfiles.length >= 5" class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded-full font-bold">
+                                        Лимит 5/5
+                                    </span>
+                                    <span v-else class="text-[10px] text-white/40">
+                                        {{ Math.max(0, 5 - userTrackedProfiles.length) }} своб. (до 15 дн.)
+                                    </span>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button @click="openAddTrackedModal" 
+                            class="bg-acidBright hover:bg-acidBright/90 text-black text-xs font-bold px-3 py-1.5 rounded-xl flex items-center space-x-1 transition-all active:scale-95 shadow-[0_0_10px_rgba(186,255,41,0.3)]">
+                        <i class="ph-bold ph-plus text-sm"></i>
+                        <span>Добавить</span>
+                    </button>
+                </div>
+
+                <!-- Active Tracked Profiles List -->
+                <div v-if="userTrackedProfiles.length > 0" class="space-y-2">
+                    <div v-for="profile in userTrackedProfiles" :key="profile.username" 
+                         class="flex items-center justify-between bg-[#0a0d02] p-2.5 rounded-xl border border-white/5 hover:border-white/10 transition-all">
+                        <div class="flex items-center space-x-2.5 min-w-0 mr-2">
+                            <div class="w-2 h-2 rounded-full bg-acidBright animate-pulse flex-shrink-0"></div>
+                            <div class="truncate">
+                                <div class="flex items-center space-x-1.5 truncate">
+                                    <a :href="'https://x.com/' + profile.username" target="_blank" @click.stop 
+                                       class="text-white hover:text-acidBright font-bold text-xs truncate flex items-center space-x-1">
+                                        <span>@{{ profile.username }}</span>
+                                        <i class="ph-bold ph-arrow-square-out text-[10px] text-white/40"></i>
+                                    </a>
+                                    <span v-if="profile.source === 'calendar'" 
+                                          class="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 flex-shrink-0 font-medium">
+                                        📅 Календарь
+                                    </span>
+                                    <span v-else-if="profile.source === 'admin'" 
+                                          class="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25 flex-shrink-0 font-medium">
+                                        👑 Админ
+                                    </span>
+                                    <span v-else 
+                                          class="text-[9px] px-1.5 py-0.2 rounded bg-acidBright/15 text-acidBright border border-acidBright/25 flex-shrink-0 font-medium">
+                                        🎯 Карточка
+                                    </span>
+                                </div>
+                                <div class="text-[10px] text-white/40 flex items-center space-x-1 mt-0.5">
+                                    <i class="ph-bold ph-clock text-[9px]"></i>
+                                    <span>{{ formatExpiry(profile.tracking_expires_at, profile.source) }}</span>
+                                    <span v-if="profile.display_name && profile.display_name !== profile.username" class="text-white/30 truncate">
+                                        • {{ profile.display_name }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center space-x-1.5 flex-shrink-0">
+                            <button @click="deleteUserTrackedProfile(profile)" 
+                                    class="text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 p-2 rounded-lg transition-all active:scale-90" 
+                                    title="Удалить из отслеживания">
+                                <i class="ph-bold ph-trash text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div v-else class="text-center py-4 px-3 bg-[#0a0d02]/60 rounded-xl border border-white/5 space-y-1">
+                    <p class="text-xs text-white/60 font-medium">Нет отслеживаемых профилей</p>
+                    <p class="text-[10px] text-white/40">
+                        {{ isAdmin ? 'Добавьте профили Х для получения оповещений о важных анонсах и твитах.' : 'Добавьте до 5 профилей Х (через карточку или календарь) для получения оповещений о постах в течение 15 дней.' }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="list-card -mx-4 px-4 py-6 min-h-[300px]">
+                <div class="flex justify-between items-center mb-6 px-1">
+                    <h3 class="font-bold text-lg">{{t("logs")}}</h3>
+                    <div class="text-sm text-white/50 flex items-center">{{t("all")}} <i class="ph-bold ph-caret-down ml-1"></i></div>
+                </div>
+                
+                <div class="space-y-4">
+                    <div v-for="(coin, idx) in (trackedCoins.length ? trackedCoins.slice(0,5) : mockCoins)" :key="coin.id" 
+                         class="flex justify-between items-center cursor-pointer" @click="openCoin(coin)">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-[#1f2316] flex items-center justify-center mr-3">
+                                <img v-if="coin.icon" :src="coin.icon" class="w-full h-full rounded-full object-cover" @error="$event.target.src='https://i.imgur.com/aFgZc4K.png'">
+                                <i v-else :class="coin.id%2===0 ? 'ph-bold ph-arrow-down text-red-400' : 'ph-bold ph-arrow-up text-acidBright'"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold text-sm">{{coin.ticker}} <span class="text-acidBright/80 text-xs font-normal">@{{coin.network}}</span></div>
+                                <div class="text-xs text-white/40 mt-0.5">{{t("tracker")}}</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-sm text-white">${{coin.baseline_price}}</div>
+                            <div class="text-[10px] text-white/40 mt-0.5">{{t("threshold")}} ±{{coin.trigger_percent}}%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- COLLECTIONS LIST VIEW -->
+        <div v-if="currentView === 'collections'" class="p-4 pt-6 space-y-5 pb-24">
+            <div class="flex items-center mb-6">
+                <button class="text-acidBright flex items-center text-lg active:opacity-50" @click="currentView = 'home'">
+                    <i class="ph-bold ph-caret-left mr-1"></i> {{t("back")}}
+                </button>
+                <div class="mx-auto text-center pr-16">
+                    <h2 class="font-bold">{{t("collections_title")}}</h2>
+                    <p class="text-[10px] text-white/40">{{collections.length}} {{t("collections_count")}}</p>
+                </div>
+            </div>
+
+            <div class="list-card -mx-4 px-4 py-6 min-h-screen">
+                <div class="space-y-4">
+                    <div v-for="coll in collections" :key="coll.id" 
+                         class="flex justify-between items-center cursor-pointer p-4 rounded-xl border border-white/5 bg-[#1f2316] hover:bg-[#2a2f1d] active:scale-95 transition-all" @click="openCollection(coll)">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-acidBright/10 flex items-center justify-center mr-3">
+                                <i class="ph-fill ph-folder text-acidBright text-lg"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold text-sm">{{coll.name || t('collection_fallback') + ' ' + coll.id}}</div>
+                                <div class="text-xs text-white/40 mt-0.5">{{trackedCoins.filter(c => c.collection_id === coll.id).length}} {{t("tokens")}}</div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-end gap-2">
+                            <button class="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full text-xs font-bold" @click.stop="setTargetChatColl(coll)">
+                                Добавить чат
+                            </button>
+                            
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="w-full mt-4 bg-acidBright text-bgMain font-bold text-lg py-4 rounded-full flex items-center justify-center shadow-[0_4px_15px_rgba(186,255,41,0.3)] active:scale-95 transition-transform fixed bottom-24 left-4" style="width: calc(100% - 32px);" @click="createCollection()">
+                {{t("create_collection")}}
+            </button>
+        </div>
+
+        <!-- COINS LIST VIEW -->
+        <div v-if="currentView === 'coins'" class="p-4 pt-6 space-y-5 pb-24">
+            <div class="flex items-center mb-6">
+                <button class="text-acidBright flex items-center text-lg active:opacity-50" @click="currentView = 'collections'">
+                    <i class="ph-bold ph-caret-left mr-1"></i> {{t("back")}}
+                </button>
+                <div class="mx-auto text-center pr-16">
+                    <h2 class="font-bold">{{selectedCollection?.name || t('collection_fallback')}}</h2>
+                    <p class="text-[10px] text-white/40">{{filteredCoins.length}} {{t("active_sonars")}}</p>
+                </div>
+            </div>
+
+            <div class="list-card -mx-4 px-4 py-6 min-h-screen">
+                <div class="space-y-4">
+                    <div v-for="coin in filteredCoins" :key="coin.id" 
+                         class="flex justify-between items-center cursor-pointer" @click="openCoin(coin)">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-[#1f2316] flex items-center justify-center mr-3">
+                                <img v-if="coin.icon" :src="coin.icon" class="w-full h-full rounded-full object-cover" @error="$event.target.src='https://i.imgur.com/aFgZc4K.png'">
+                                <i v-else :class="coin.id%2===0 ? 'ph-bold ph-arrow-down text-red-400' : 'ph-bold ph-arrow-up text-acidBright'"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold text-sm">{{coin.ticker}} <span class="text-acidBright/80 text-xs font-normal capitalize">@{{coin.network}}</span></div>
+                                <div class="text-xs text-white/40 mt-0.5">{{t("tracker")}}</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-sm text-white">${{coin.baseline_price}}</div>
+                            <div class="text-[10px] text-white/40 mt-0.5 flex items-center justify-end">
+                                <div class="w-1.5 h-1.5 rounded-full bg-acidBright mr-1 animate-pulse"></div> {{t("live")}} ±{{coin.trigger_percent}}%
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <button class="w-full mt-4 bg-acidBright text-bgMain font-bold text-lg py-4 rounded-full flex items-center justify-center shadow-[0_4px_15px_rgba(186,255,41,0.3)] active:scale-95 transition-transform fixed bottom-24 left-4" style="width: calc(100% - 32px);" @click="currentView = 'coin_add'">
+                {{t("add_token")}}
+            </button>
+        </div>
+
+        <!-- COIN ADD VIEW -->
+        <div v-if="currentView === 'coin_add'" class="p-4 pt-6 space-y-5 pb-24">
+            <div class="flex items-center mb-6">
+                <button class="text-acidBright flex items-center text-lg active:opacity-50" @click="currentView = 'coins'; searchResults = []; selectedSearchResult = null; searchQuery = '';">
+                    <i class="ph-bold ph-caret-left mr-1"></i> {{t("back")}}
+                </button>
+                <div class="mx-auto text-center pr-16">
+                    <h2 class="font-bold">{{t('add_token_title')}}</h2>
+                </div>
+            </div>
+            
+            <div class="space-y-4">
+                <!-- Step 1: Search -->
+                <div v-if="!selectedSearchResult">
+                    <div class="flex space-x-2">
+                        <input v-model="searchQuery" :placeholder="t('search_placeholder')" class="w-full bg-[#11140d] p-4 rounded-xl text-white outline-none focus:ring-1 focus:ring-acidBright" @keyup.enter="searchTokens">
+                        <button @click="searchTokens" class="bg-acidBright text-bgMain px-6 rounded-xl font-bold active:scale-95 transition-transform flex items-center justify-center min-w-[70px]">
+                            <i class="ph-bold ph-magnifying-glass text-2xl" v-if="!isSearching"></i>
+                            <i class="ph-bold ph-spinner animate-spin text-2xl" v-else></i>
+                        </button>
+                    </div>
+
+                    <!-- Search Results -->
+                    <div v-if="searchResults.length > 0" class="mt-6 space-y-3">
+                        <div v-for="res in searchResults" :key="res.id" @click="selectSearchResult(res)" class="main-card p-4 rounded-xl flex justify-between items-center cursor-pointer active:scale-95 transition-transform shadow-[0_4px_15px_rgba(0,0,0,0.5)] border border-white/5">
+                            <div class="flex items-center space-x-3">
+                                <img :src="res.icon" class="w-12 h-12 rounded-full bg-white/10 object-cover" @error="$event.target.src='https://i.imgur.com/aFgZc4K.png'">
+                                <div>
+                                    <div class="font-bold text-lg flex items-center">{{ res.ticker }} <span class="text-[10px] font-bold text-white/60 ml-2 px-2 py-0.5 bg-white/10 rounded-full">{{ res.type }}</span></div>
+                                    <div class="text-xs text-white/50 w-32 truncate">{{ res.name }}</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="font-bold text-acidBright text-lg">${{ res.price > 0.01 ? res.price.toFixed(2) : res.price }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-else-if="searchQuery && !isSearching && searchResults.length === 0" class="text-center py-10 text-white/30">{{t("nothing_found")}}</div>
+                </div>
+
+                <!-- Step 2: Set Trigger -->
+                <div v-else class="space-y-6 animate-[slideUp_0.2s_ease-out]">
+                    <div class="main-card p-5 rounded-2xl flex items-center justify-between shadow-[0_4px_20px_rgba(0,0,0,0.6)] border border-acidBright/20">
+                        <div class="flex items-center space-x-4">
+                            <img :src="selectedSearchResult.icon" class="w-14 h-14 rounded-full bg-white/10 object-cover" @error="$event.target.src='https://i.imgur.com/aFgZc4K.png'">
+                            <div>
+                                <div class="font-bold text-xl">{{ selectedSearchResult.ticker }}</div>
+                                <div class="text-sm text-acidBright font-bold">${{ selectedSearchResult.price > 0.01 ? selectedSearchResult.price.toFixed(2) : selectedSearchResult.price }}</div>
+                            </div>
+                        </div>
+                        <button @click="selectedSearchResult = null" class="text-white/40 hover:text-white underline text-sm px-2 py-1">{{t('change')}}</button>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-white/50 ml-1 mb-2">{{t('alert_deviation')}}</label>
+                        <input v-model="addForm.trigger_percent" :placeholder="t('alert_deviation_placeholder')" type="number" class="w-full bg-[#11140d] p-5 rounded-2xl text-white outline-none focus:ring-1 focus:ring-acidBright text-xl font-bold shadow-inner">
+                    </div>
+                    
+                    <button class="w-full mt-4 bg-acidBright text-bgMain font-bold text-xl py-5 rounded-full shadow-[0_4px_15px_rgba(186,255,41,0.3)] active:scale-95 transition-transform" @click="saveCoin">
+                        {{t("save_tracker")}}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- NFTs VIEW -->
+        <div v-if="currentView === 'nfts'" class="p-4 pt-6 space-y-5 pb-24">
+            <div class="flex items-center mb-6">
+                <button class="text-acidBright flex items-center text-lg active:opacity-50" @click="currentView = 'home'">
+                    <i class="ph-bold ph-caret-left mr-1"></i> {{t("back")}}
+                </button>
+                <div class="mx-auto text-center pr-16">
+                    <h2 class="font-bold">{{t("nfts")}}</h2>
+                    <p class="text-[10px] text-white/40">{{trackedNFTs.length}} {{t("active_sonars")}}</p>
+                </div>
+            </div>
+            
+            <div v-if="trackedNFTs.length === 0" class="text-center text-white/50 py-10">{{t('no_nfts_tracked')}}</div>
+
+            <div class="list-card -mx-4 px-4 py-6 min-h-screen" v-else>
+                <div class="space-y-4">
+                    <div v-for="nft in trackedNFTs" :key="nft.id" class="flex justify-between items-center cursor-pointer" @click="selectedNft = nft; currentView = 'nft_detail'">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-[#1f2316] flex items-center justify-center mr-3 font-bold text-lg">
+                                🖼️
+                            </div>
+                            <div>
+                                <div class="font-bold text-sm">{{nft.collection_name || nft.collection_slug}}</div>
+                                <div class="text-xs text-white/40 mt-0.5">{{t("threshold")}} {{nft.threshold_percent}}%</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-sm text-white">{{nft.baseline_price}} ETH</div>
+                            <div class="text-[10px] text-white/40 flex items-center justify-end mt-0.5">
+                                <div class="w-1.5 h-1.5 rounded-full bg-acidBright mr-1 animate-pulse"></div> {{t("live")}}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="w-full mt-4 bg-acidBright text-bgMain font-bold text-lg py-4 rounded-full flex items-center justify-center shadow-[0_4px_15px_rgba(186,255,41,0.3)] active:scale-95 transition-transform fixed bottom-24 left-4" style="width: calc(100% - 32px);" @click="currentView = 'nft_add'">
+                {{t("add_nft_alert")}}
+            </button>
+        </div>
+
+        <!-- NFT DETAIL VIEW -->
+        <div v-if="currentView === 'nft_detail'" class="p-4 pt-6 flex flex-col min-h-screen">
+            <div class="flex items-center mb-6">
+                <button class="text-acidBright flex items-center text-lg active:opacity-50" @click="currentView = 'nfts'">
+                    <i class="ph-bold ph-caret-left mr-1"></i> {{t("back")}}
+                </button>
+                <div class="mx-auto text-center pr-16">
+                    <h2 class="font-bold">{{selectedNft?.collection_name || selectedNft?.collection_slug}}</h2>
+                </div>
+            </div>
+            <div class="text-center mb-6">
+                <div class="text-4xl font-bold tracking-tight">{{selectedNft?.baseline_price}} ETH</div>
+            </div>
+            <div class="space-y-3 mb-8">
+                <button class="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-2xl active:scale-95 transition-all" @click="showNftHistory(selectedNft)">
+                    {{t("alert_history")}}
+                </button>
+                <button class="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-2xl active:scale-95 transition-all" @click="editNft(selectedNft)">
+                    {{t("edit_alert")}}
+                </button>
+                <button class="w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold py-4 rounded-2xl active:scale-95 transition-all" @click="deleteNft(selectedNft.id)">
+                    🗑️ {{t("delete_alert")}}
+                </button>
+            </div>
+        </div>
+
+        <!-- NFT ADD VIEW -->
+        <div v-if="currentView === 'nft_add'" class="p-4 pt-6 space-y-5">
+            <div class="flex items-center mb-6">
+                <button class="text-acidBright flex items-center text-lg active:opacity-50" @click="currentView = 'nfts'">
+                    <i class="ph-bold ph-caret-left mr-1"></i> {{t("back")}}
+                </button>
+                <div class="mx-auto text-center pr-16">
+                    <h2 class="font-bold">{{t('add_nft')}}</h2>
+                </div>
+            </div>
+            <div class="space-y-4">
+                <input v-model="addForm.collection_slug" :placeholder="t('add_opensea_url')" class="w-full bg-[#11140d] p-4 rounded-xl text-white outline-none">
+                <input v-model="addForm.threshold_percent" :placeholder="t('threshold_percent')" type="number" class="w-full bg-[#11140d] p-4 rounded-xl text-white outline-none">
+                <button class="w-full mt-4 bg-acidBright text-bgMain font-bold text-lg py-4 rounded-full shadow-[0_4px_15px_rgba(186,255,41,0.3)] active:scale-95 transition-transform" @click="saveNft">
+                    {{t("fetch_save")}}
+                </button>
+            </div>
+        </div>
+
+        <!-- EVM VIEW -->
+        <div v-if="currentView === 'evm'" class="p-4 pt-6 space-y-5 pb-24">
+            <div class="flex items-center mb-6">
+                <button class="text-acidBright flex items-center text-lg active:opacity-50" @click="currentView = 'home'">
+                    <i class="ph-bold ph-caret-left mr-1"></i> {{t("back")}}
+                </button>
+                <div class="mx-auto text-center pr-16">
+                    <h2 class="font-bold">{{t('evm_wallets')}}</h2>
+                    <p class="text-[10px] text-white/40">{{evmWallets.length}} {{t("active_sonars")}}</p>
+                </div>
+            </div>
+            
+            <div v-if="evmWallets.length === 0" class="text-center text-white/50 py-10">{{t('no_evm_tracked')}}</div>
+
+            <div class="list-card -mx-4 px-4 py-6 min-h-screen" v-else>
+                <div class="space-y-4">
+                    <div v-for="wallet in evmWallets" :key="wallet.id" class="flex justify-between items-center cursor-pointer" @click="selectedWallet = wallet; currentView = 'wallet_evm_detail'">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-[#1f2316] flex items-center justify-center mr-3">
+                                <i class="ph-bold ph-wallet text-[#627EEA] text-xl"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold text-sm">{{wallet.name || t('evm_wallet_fallback')}}</div>
+                                <div class="text-xs text-white/40 mt-0.5">{{wallet.address.slice(0,6)}}...{{wallet.address.slice(-4)}}</div>
+                            </div>
+                        </div>
+                        <div class="text-[10px] text-white/40 flex items-center justify-end mt-0.5">
+                            <div class="w-1.5 h-1.5 rounded-full bg-acidBright mr-1 animate-pulse"></div> {{t("live")}}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="w-full mt-4 bg-acidBright text-bgMain font-bold text-lg py-4 rounded-full flex items-center justify-center shadow-[0_4px_15px_rgba(186,255,41,0.3)] active:scale-95 transition-transform fixed bottom-24 left-4" style="width: calc(100% - 32px);" @click="currentView = 'wallet_add'; addForm.type = 'evm'">
+                {{t("add_wallet")}}
+            </button>
+        </div>
+
+        <!-- SOLANA VIEW -->
+        <div v-if="currentView === 'solana'" class="p-4 pt-6 space-y-5 pb-24">
+            <div class="flex items-center mb-6">
+                <button class="text-acidBright flex items-center text-lg active:opacity-50" @click="currentView = 'home'">
+                    <i class="ph-bold ph-caret-left mr-1"></i> {{t("back")}}
+                </button>
+                <div class="mx-auto text-center pr-16">
+                    <h2 class="font-bold">{{t('solana_wallets')}}</h2>
+                    <p class="text-[10px] text-white/40">{{solWallets.length}} {{t("active_sonars")}}</p>
+                </div>
+            </div>
+            
+            <div v-if="solWallets.length === 0" class="text-center text-white/50 py-10">{{t('no_solana_tracked')}}</div>
+
+            <div class="list-card -mx-4 px-4 py-6 min-h-screen" v-else>
+                <div class="space-y-4">
+                    <div v-for="wallet in solWallets" :key="wallet.id" class="flex justify-between items-center cursor-pointer" @click="selectedWallet = wallet; currentView = 'wallet_sol_detail'">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 rounded-full bg-[#1f2316] flex items-center justify-center mr-3">
+                                <i class="ph-bold ph-wallet text-[#14F195] text-xl"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold text-sm">{{wallet.name || t('solana_wallet_fallback')}}</div>
+                                <div class="text-xs text-white/40 mt-0.5">{{wallet.address.slice(0,6)}}...{{wallet.address.slice(-4)}}</div>
+                            </div>
+                        </div>
+                        <div class="text-[10px] text-white/40 flex items-center justify-end mt-0.5">
+                            <div class="w-1.5 h-1.5 rounded-full bg-acidBright mr-1 animate-pulse"></div> {{t("live")}}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="w-full mt-4 bg-acidBright text-bgMain font-bold text-lg py-4 rounded-full flex items-center justify-center shadow-[0_4px_15px_rgba(186,255,41,0.3)] active:scale-95 transition-transform fixed bottom-24 left-4" style="width: calc(100% - 32px);" @click="currentView = 'wallet_add'; addForm.type = 'solana'">
+                {{t("add_wallet")}}
+            </button>
+        </div>
+
+        <!-- WALLET DETAIL -->
+        <div v-if="currentView === 'wallet_evm_detail' || currentView === 'wallet_sol_detail'" class="p-4 pt-6 space-y-5">
+            <div class="flex items-center mb-6">
+                <button class="text-acidBright flex items-center text-lg active:opacity-50" @click="currentView = (currentView === 'wallet_evm_detail' ? 'evm' : 'solana')">
+                    <i class="ph-bold ph-caret-left mr-1"></i> {{t("back")}}
+                </button>
+                <div class="mx-auto text-center pr-16">
+                    <h2 class="font-bold">{{selectedWallet?.name}}</h2>
+                </div>
+            </div>
+            <div class="main-card p-4 rounded-[24px] mb-3">
+                <div class="text-xs text-white/50 mb-4 break-all">{{t('address')}}: {{selectedWallet?.address}}</div>
+                <div class="flex justify-between items-center mb-3">
+                    <span>🔄 {{t('swaps')}}</span>
+                    <button class="px-4 py-1.5 rounded-full text-xs font-bold transition-colors" :class="selectedWallet?.filter_swaps ? 'bg-acidBright text-black' : 'bg-gray-700 text-white'" @click="toggleWalletFilter(selectedWallet, currentView==='wallet_evm_detail'?'evm':'solana', 'filter_swaps')">{{selectedWallet?.filter_swaps ? t('on') : t('off')}}</button>
+                </div>
+                <div class="flex justify-between items-center mb-3">
+                    <span>💸 {{t('transfers')}}</span>
+                    <button class="px-4 py-1.5 rounded-full text-xs font-bold transition-colors" :class="selectedWallet?.filter_transfers ? 'bg-acidBright text-black' : 'bg-gray-700 text-white'" @click="toggleWalletFilter(selectedWallet, currentView==='wallet_evm_detail'?'evm':'solana', 'filter_transfers')">{{selectedWallet?.filter_transfers ? t('on') : t('off')}}</button>
+                </div>
+                <div class="flex justify-between items-center mb-3">
+                    <span>🖼️ {{t('nfts_filter')}}</span>
+                    <button class="px-4 py-1.5 rounded-full text-xs font-bold transition-colors" :class="selectedWallet?.filter_nfts ? 'bg-acidBright text-black' : 'bg-gray-700 text-white'" @click="toggleWalletFilter(selectedWallet, currentView==='wallet_evm_detail'?'evm':'solana', 'filter_nfts')">{{selectedWallet?.filter_nfts ? t('on') : t('off')}}</button>
+                </div>
+                <div class="flex justify-between items-center mb-3">
+                    <span>🔨 {{t('mints')}}</span>
+                    <button class="px-4 py-1.5 rounded-full text-xs font-bold transition-colors" :class="selectedWallet?.filter_mints ? 'bg-acidBright text-black' : 'bg-gray-700 text-white'" @click="toggleWalletFilter(selectedWallet, currentView==='wallet_evm_detail'?'evm':'solana', 'filter_mints')">{{selectedWallet?.filter_mints ? t('on') : t('off')}}</button>
+                </div>
+            </div>
+            <button class="w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold py-4 rounded-2xl active:scale-95 transition-all" @click="deleteWallet(selectedWallet.id, currentView==='wallet_evm_detail'?'evm':'solana')">
+                🗑️ {{t("delete_wallet")}}
+            </button>
+        </div>
+
+        <!-- WALLET ADD VIEW -->
+        <div v-if="currentView === 'wallet_add'" class="p-4 pt-6 space-y-5">
+            <div class="flex items-center mb-6">
+                <button class="text-acidBright flex items-center text-lg active:opacity-50" @click="currentView = addForm.type === 'evm' ? 'evm' : 'solana'">
+                    <i class="ph-bold ph-caret-left mr-1"></i> {{t("back")}}
+                </button>
+                <div class="mx-auto text-center pr-16">
+                    <h2 class="font-bold">{{t('add_wallet_title')}}</h2>
+                </div>
+            </div>
+            <div class="space-y-4">
+                <input v-model="addForm.address" :placeholder="t('address_placeholder')" class="w-full bg-[#11140d] p-4 rounded-xl text-white outline-none">
+                <input v-model="addForm.name" :placeholder="t('name_placeholder')" class="w-full bg-[#11140d] p-4 rounded-xl text-white outline-none">
+                <button class="w-full mt-4 bg-acidBright text-bgMain font-bold text-lg py-4 rounded-full shadow-[0_4px_15px_rgba(186,255,41,0.3)] active:scale-95 transition-transform" @click="saveWallet">
+                    {{t("save")}}
+                </button>
+            </div>
+        </div>
+
+        <!-- CHART VIEW -->
+        <div v-if="currentView === 'coin_detail'" class="p-4 pt-6 flex flex-col min-h-screen">
+            <div class="flex items-center mb-6 flex-shrink-0">
+                <button class="text-acidBright flex items-center text-lg active:opacity-50" @click="currentView = 'coins'">
+                    <i class="ph-bold ph-caret-left mr-1"></i> {{t("back")}}
+                </button>
+                <div class="mx-auto text-center pr-16">
+                    <h2 class="font-bold">{{selectedCoin?.ticker}}</h2>
+                    <p class="text-[10px] text-white/40 capitalize">{{selectedCoin?.network}}</p>
+                </div>
+            </div>
+            
+            <div class="text-center mb-6 flex-shrink-0">
+                <div class="text-4xl font-bold tracking-tight">${{selectedCoin?.baseline_price}}</div>
+                <div :class="selectedCoin?.change24h?.startsWith('-') ? 'text-red-400' : 'text-acidBright'" class="text-sm mt-1 font-medium">{{selectedCoin?.change24h}} (24h)</div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-4 text-sm text-center font-medium bg-[#11140d] rounded-2xl p-4 flex-shrink-0">
+                <div><div class="text-white/40 text-[10px]">{{t('market_cap')}}</div><div>{{selectedCoin?.marketCap}}</div></div>
+                <div><div class="text-white/40 text-[10px]">{{t('vol_24h')}}</div><div>{{selectedCoin?.vol24h}}</div></div>
+                <div><div class="text-white/40 text-[10px]">{{t('change_24h')}}</div><div :class="selectedCoin?.change24h?.startsWith('-') ? 'text-red-400' : 'text-acidBright'">{{selectedCoin?.change24h}}</div></div>
+                <div><div class="text-white/40 text-[10px]">{{t('fdv')}}</div><div>{{selectedCoin?.fdv}}</div></div>
+            </div>
+            <!-- Chart Container -->
+            <div class="chart-container relative mb-6" style="padding:0; overflow:hidden;">
+                <div id="tv-chart" style="width:100%; height:320px; position:relative;">
+                    <div id="tv-tooltip" class="tv-tooltip"></div>
+                </div>
+            </div>
+
+            <div class="space-y-3 mb-8 flex-shrink-0">
+                <button class="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-2xl active:scale-95 transition-all" @click="editCoin(selectedCoin)">{{t("edit_alert_pct")}}</button>
+                <button class="w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold py-4 rounded-2xl active:scale-95 transition-all" @click="deleteCoin(selectedCoin.id)">🗑️ {{t("delete_tracker")}}</button>
+            </div>
+        </div>
+
+        
+        <!-- ADMIN PANEL VIEW -->
+        <div v-if="currentView === 'admin_panel'" class="p-4 pt-6 space-y-5 pb-24">
+            <div class="flex items-center mb-6">
+                <button class="text-acidBright flex items-center text-lg active:opacity-50" @click="currentView = 'home'">
+                    <i class="ph-bold ph-caret-left mr-1"></i> {{t("back")}}
+                </button>
+                <div class="mx-auto text-center pr-16">
+                    <h2 class="font-bold">Admin Panel</h2>
+                </div>
+            </div>
+            <div class="space-y-4">
+                <button class="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-2xl active:scale-95 transition-all" @click="showStatsModal = true; loadAdminStats()">
+                    📊 Statistics
+                </button>
+            </div>
+        </div>
+
+        <!-- CALENDAR VIEW -->
+        <div v-if="currentView === 'calendar'" class="p-4 pt-6 space-y-4 pb-24">
+            <!-- Top Header -->
+            <div class="flex items-center justify-between">
+                <button class="text-acidBright flex items-center text-sm font-bold active:opacity-50" @click="currentView = 'home'">
+                    <i class="ph-bold ph-caret-left mr-1 text-base"></i> {{ t("back") }}
+                </button>
+                <div class="text-center">
+                    <h2 class="font-bold text-base text-white">📅 {{ t("calendar") }}</h2>
+                </div>
+                <button @click="openAddEventModalDefault" class="bg-acidBright text-black text-xs font-bold px-3 py-1.5 rounded-xl flex items-center space-x-1 active:scale-95 transition-all shadow-[0_0_10px_rgba(186,255,41,0.4)]">
+                    <i class="ph-bold ph-plus text-sm"></i>
+                    <span>{{ t("add_event") }}</span>
+                </button>
+            </div>
+
+            <!-- Tracking Quota Bar -->
+            <div class="main-card rounded-2xl p-3 border border-white/5 flex items-center justify-between text-xs">
+                <div class="flex items-center space-x-2">
+                    <div class="w-2 h-2 rounded-full" :class="calendarTrackedCount > 0 ? 'bg-acidBright animate-pulse' : 'bg-white/30'"></div>
+                    <span class="text-white/70">{{ t("tracking_quota") }}:</span>
+                    <span class="text-acidBright font-bold">{{ calendarTrackedCount }} / 5</span>
+                </div>
+                <div class="text-[10px] text-white/40">
+                    {{ 5 - calendarTrackedCount }} {{ lang === 'ru' ? 'свободно (на 15 дней)' : 'free (15 days)' }}
+                </div>
+            </div>
+
+            <!-- Calendar Filter Pills -->
+            <div class="flex space-x-1.5 overflow-x-auto pb-1 scrollbar-none">
+                <button @click="calendarFilter = 'all'" :class="calendarFilter === 'all' ? 'bg-acidBright text-black font-bold shadow-[0_0_8px_rgba(186,255,41,0.3)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-3 py-1 rounded-xl text-xs whitespace-nowrap transition-all">
+                    {{ t("all") }}
+                </button>
+                <button @click="calendarFilter = 'mint'" :class="calendarFilter === 'mint' ? 'bg-acidBright text-black font-bold shadow-[0_0_8px_rgba(186,255,41,0.3)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-3 py-1 rounded-xl text-xs whitespace-nowrap transition-all">
+                    🔨 Mint
+                </button>
+                <button @click="calendarFilter = 'tge'" :class="calendarFilter === 'tge' ? 'bg-purple-500 text-white font-bold shadow-[0_0_8px_rgba(168,85,247,0.4)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-3 py-1 rounded-xl text-xs whitespace-nowrap transition-all">
+                    🚀 TGE
+                </button>
+                <button @click="calendarFilter = 'checker'" :class="calendarFilter === 'checker' ? 'bg-amber-500 text-black font-bold shadow-[0_0_8px_rgba(245,158,11,0.4)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-3 py-1 rounded-xl text-xs whitespace-nowrap transition-all">
+                    🔍 Checker
+                </button>
+                <button @click="calendarFilter = 'whitelist'" :class="calendarFilter === 'whitelist' ? 'bg-cyan-500 text-black font-bold shadow-[0_0_8px_rgba(6,182,212,0.4)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-3 py-1 rounded-xl text-xs whitespace-nowrap transition-all">
+                    🎟️ Whitelist
+                </button>
+            </div>
+
+            <!-- Month Navigation Bar -->
+            <div class="flex items-center justify-between bg-[#1f2316] p-3 rounded-2xl border border-white/5">
+                <button @click="prevCalendarMonth" class="text-white/70 hover:text-acidBright p-1.5 rounded-xl hover:bg-white/5 active:scale-90 transition-all">
+                    <i class="ph-bold ph-caret-left text-lg"></i>
+                </button>
+                <div class="flex items-center space-x-3">
+                    <span class="font-bold text-white text-base tracking-wide">{{ currentMonthYearName }}</span>
+                    <button @click="goToToday" class="text-[10px] bg-white/5 hover:bg-white/10 text-acidBright border border-acidBright/30 px-2 py-0.5 rounded-lg transition-all font-mono">
+                        {{ t("today") }}
+                    </button>
+                </div>
+                <button @click="nextCalendarMonth" class="text-white/70 hover:text-acidBright p-1.5 rounded-xl hover:bg-white/5 active:scale-90 transition-all">
+                    <i class="ph-bold ph-caret-right text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Calendar Grid (7 columns) -->
+            <div class="bg-[#1f2316] rounded-2xl p-3 border border-white/5 shadow-lg relative">
+                <!-- Weekday Headers -->
+                <div class="grid grid-cols-7 gap-1 text-center mb-2">
+                    <div class="text-[11px] font-bold text-white/40">{{ t("mon") }}</div>
+                    <div class="text-[11px] font-bold text-white/40">{{ t("tue") }}</div>
+                    <div class="text-[11px] font-bold text-white/40">{{ t("wed") }}</div>
+                    <div class="text-[11px] font-bold text-white/40">{{ t("thu") }}</div>
+                    <div class="text-[11px] font-bold text-white/40">{{ t("fri") }}</div>
+                    <div class="text-[11px] font-bold text-white/50">{{ t("sat") }}</div>
+                    <div class="text-[11px] font-bold text-white/50">{{ t("sun") }}</div>
+                </div>
+
+                <!-- Month Day Cells -->
+                <div v-if="calendarLoading" class="text-center py-12 text-white/40">
+                    <i class="ph-bold ph-spinner animate-spin text-3xl mb-2"></i>
+                    <div>Загрузка календаря...</div>
+                </div>
+                <div v-else class="grid grid-cols-7 gap-1">
+                    <!-- Empty padding cells before 1st day -->
+                    <div v-for="p in calendarMonthPadding" :key="'pad-' + p" class="h-16 rounded-xl bg-transparent opacity-20"></div>
+
+                    <!-- Day cells -->
+                    <div v-for="day in calendarDaysMatrix" :key="day.dateStr"
+                         @click="onDayCellClick(day)"
+                         @mouseenter="hoveredDateObj = day"
+                         @mouseleave="hoveredDateObj = null"
+                         :class="[
+                             'h-16 p-1.5 rounded-xl border flex flex-col justify-between transition-all relative cursor-pointer select-none',
+                             day.isToday ? 'border-acidBright bg-acidBright/10 shadow-[0_0_10px_rgba(186,255,41,0.2)]' : 'border-white/5 bg-[#0a0d02]/60 hover:bg-white/5 hover:border-white/20',
+                             day.events.length > 0 ? 'hover:border-acidBright/40' : ''
+                         ]">
+                        <!-- Top Row: Day Number + Event Indicator Dot -->
+                        <div class="flex items-center justify-between">
+                            <span :class="day.isToday ? 'text-acidBright font-bold' : 'text-white/80'" class="text-xs font-mono">
+                                {{ day.dayNumber }}
+                            </span>
+                            <span v-if="day.events.length > 0" class="flex h-2 w-2 relative">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-acidBright opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-acidBright"></span>
+                            </span>
+                        </div>
+
+                        <!-- Event Type Mini Badges / Preview Counters -->
+                        <div v-if="day.events.length > 0" class="flex flex-col space-y-0.5 overflow-hidden">
+                            <div class="flex flex-wrap gap-0.5">
+                                <span v-if="day.counts.mint > 0" class="text-[8px] font-bold px-1 py-0.2 rounded bg-acidBright/20 text-acidBright leading-none">
+                                    🔨{{ day.counts.mint }}
+                                </span>
+                                <span v-if="day.counts.tge > 0" class="text-[8px] font-bold px-1 py-0.2 rounded bg-purple-500/20 text-purple-300 leading-none">
+                                    🚀{{ day.counts.tge }}
+                                </span>
+                                <span v-if="day.counts.checker > 0" class="text-[8px] font-bold px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 leading-none">
+                                    🔍{{ day.counts.checker }}
+                                </span>
+                                <span v-if="day.counts.whitelist > 0" class="text-[8px] font-bold px-1 py-0.2 rounded bg-cyan-500/20 text-cyan-300 leading-none">
+                                    🎟️{{ day.counts.whitelist }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div v-else class="text-[9px] text-white/10 hover:text-white/30 text-center font-mono">
+                            +
+                        </div>
+
+                        <!-- Hover Floating Preview Popover (Interactive!) -->
+                        <div v-if="hoveredDateObj && hoveredDateObj.dateStr === day.dateStr && day.events.length > 0"
+                             class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 bg-[#14170d] border border-acidBright/50 rounded-xl p-2.5 shadow-[0_4px_20px_rgba(0,0,0,0.9)] min-w-[170px] pointer-events-auto"
+                             @click.stop>
+                            <div class="text-[11px] font-bold text-white mb-1 border-b border-white/10 pb-1 flex justify-between items-center">
+                                <span>{{ day.dayNumber }} {{ currentMonthName }}</span>
+                                <span class="text-[9px] text-acidBright font-mono">{{ day.events.length }} соб.</span>
+                            </div>
+                            <div class="text-[10px] text-white/70 space-y-1 mb-2">
+                                <div v-if="day.counts.mint > 0" class="flex justify-between items-center cursor-pointer hover:text-acidBright" @click="onDateQuickFilterClick(day, 'mint')">
+                                    <span>🔨 Минты:</span>
+                                    <span class="font-bold text-acidBright">{{ day.counts.mint }}</span>
+                                </div>
+                                <div v-if="day.counts.tge > 0" class="flex justify-between items-center cursor-pointer hover:text-purple-300" @click="onDateQuickFilterClick(day, 'tge')">
+                                    <span>🚀 TGE:</span>
+                                    <span class="font-bold text-purple-300">{{ day.counts.tge }}</span>
+                                </div>
+                                <div v-if="day.counts.checker > 0" class="flex justify-between items-center cursor-pointer hover:text-amber-300" @click="onDateQuickFilterClick(day, 'checker')">
+                                    <span>🔍 Чекеры:</span>
+                                    <span class="font-bold text-amber-300">{{ day.counts.checker }}</span>
+                                </div>
+                                <div v-if="day.counts.whitelist > 0" class="flex justify-between items-center cursor-pointer hover:text-cyan-300" @click="onDateQuickFilterClick(day, 'whitelist')">
+                                    <span>🎟️ Вайтлисты:</span>
+                                    <span class="font-bold text-cyan-300">{{ day.counts.whitelist }}</span>
+                                </div>
+                            </div>
+                            <button @click="onDateQuickFilterClick(day, 'all')" class="w-full bg-acidBright/20 hover:bg-acidBright text-acidBright hover:text-black font-bold text-[10px] py-1 rounded-lg transition-all text-center">
+                                Открыть всё ({{ day.events.length }}) →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Below Calendar: All Events List for quick scanning -->
+            <div class="space-y-3 pt-2">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-sm text-white flex items-center space-x-1.5">
+                        <span>📋</span>
+                        <span>{{ t("upcoming_events") }}</span>
+                        <span class="text-xs text-white/40">({{ calendarEvents.length }})</span>
+                    </h3>
+                </div>
+
+                <div v-if="calendarEvents.length === 0" class="main-card rounded-2xl p-6 text-center text-white/50 border border-white/5">
+                    <i class="ph-fill ph-calendar-x text-3xl mb-2 text-white/30"></i>
+                    <p class="text-xs">{{ t("no_events") }}</p>
+                </div>
+
+                <div v-else class="space-y-2">
+                    <div v-for="event in filteredCalendarEvents.slice(0, 10)" :key="event.id" class="main-card rounded-2xl p-3 border border-white/5 hover:border-acidBright/30 transition-all flex items-center justify-between cursor-pointer" @click="openEventDayFromList(event)">
+                        <div class="flex items-center space-x-2.5">
+                            <span :class="getEventTypeBadgeClass(event.event_type)" class="text-[9px] font-bold px-2 py-0.5 rounded-full">
+                                {{ getEventTypeLabel(event.event_type) }}
+                            </span>
+                            <div>
+                                <div class="font-bold text-xs text-white">{{ event.project_name }}</div>
+                                <div v-if="event.username" class="text-[10px] text-acidBright">@{{ event.username.replace(/^@/, '') }}</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span v-if="event.track_profile == 1" class="text-[9px] text-acidBright bg-acidBright/10 border border-acidBright/20 px-1.5 py-0.5 rounded" title="Отслеживается">
+                                📡
+                            </span>
+                            <span class="text-[10px] font-mono bg-white/5 border border-white/10 px-2 py-0.5 rounded-lg text-white/80">
+                                {{ formatEventDate(event.event_date) }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- STATS MODAL -->
+        <div v-if="showStatsModal" class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
+            <div class="bg-[#1f2316] border border-white/10 rounded-2xl p-5 w-full max-w-sm">
+                <h3 class="font-bold text-lg mb-4 text-center">Statistics</h3>
+                <div v-if="adminStats" class="space-y-2 mb-6 text-sm">
+                    <div class="flex justify-between"><span>Users:</span> <span class="font-bold">{{adminStats.users}}</span></div>
+                    <div class="flex justify-between"><span>Trackers:</span> <span class="font-bold">{{adminStats.trackers}}</span></div>
+                    <div class="flex justify-between"><span>NFT Alerts:</span> <span class="font-bold">{{adminStats.alerts}}</span></div>
+                    <div class="flex justify-between"><span>Parser Targets:</span> <span class="font-bold">{{adminStats.xlist}}</span></div>
+                    <div class="flex justify-between"><span>Tweets in DB:</span> <span class="font-bold">{{adminStats.tweets}}</span></div>
+                </div>
+                <div v-else class="text-center mb-6 text-white/50">Loading...</div>
+                <button class="w-full bg-acidBright text-black py-3 rounded-xl font-bold" @click="showStatsModal = false">Close</button>
+            </div>
+        </div>
+
+        <!-- PARSER MODAL -->
+        <div v-if="showParserModal" class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
+            <div class="bg-[#1f2316] border border-white/10 rounded-2xl p-5 w-full max-w-sm max-h-[90vh] overflow-y-auto space-y-4">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-lg text-white">🔍 Парсер проектов</h3>
+                    <button @click="showParserModal = false" class="text-white/50 hover:text-white">
+                        <i class="ph-bold ph-x text-lg"></i>
+                    </button>
+                </div>
+                
+                <!-- Category Filter Pills -->
+                <div class="flex space-x-1.5 overflow-x-auto pb-1 scrollbar-none">
+                    <button @click="targetCategoryFilter = 'all'" :class="targetCategoryFilter === 'all' ? 'bg-acidBright text-black font-bold shadow-[0_0_8px_rgba(186,255,41,0.3)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-all">
+                        Все ({{ parserTargetsList.length }})
+                    </button>
+                    <button @click="targetCategoryFilter = 'nft'" :class="targetCategoryFilter === 'nft' ? 'bg-acidBright text-black font-bold shadow-[0_0_8px_rgba(186,255,41,0.3)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-all">
+                        NFT
+                    </button>
+                    <button @click="targetCategoryFilter = 'defi'" :class="targetCategoryFilter === 'defi' ? 'bg-acidBright text-black font-bold shadow-[0_0_8px_rgba(186,255,41,0.3)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-all">
+                        DeFi
+                    </button>
+                    <button @click="targetCategoryFilter = 'airdrop'" :class="targetCategoryFilter === 'airdrop' ? 'bg-acidBright text-black font-bold shadow-[0_0_8px_rgba(186,255,41,0.3)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-all">
+                        Airdrop
+                    </button>
+                    <button @click="targetCategoryFilter = 'nodes'" :class="targetCategoryFilter === 'nodes' ? 'bg-acidBright text-black font-bold shadow-[0_0_8px_rgba(186,255,41,0.3)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-all">
+                        Nodes
+                    </button>
+                </div>
+
+                <!-- Targets List -->
+                <div v-if="filteredParserTargetsList.length > 0" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    <div v-for="target in filteredParserTargetsList" :key="getTargetUsername(target)" class="flex justify-between items-center bg-[#0a0d02] p-2.5 rounded-xl text-sm border border-white/5">
+                        <div class="flex items-center space-x-2 truncate mr-2">
+                            <a :href="'https://x.com/' + getTargetUsername(target)" target="_blank" class="text-white hover:text-acidBright font-medium truncate flex items-center space-x-1">
+                                <span>@{{ getTargetUsername(target) }}</span>
+                                <i class="ph-bold ph-arrow-square-out text-[10px] text-white/40"></i>
+                            </a>
+                            <span class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-white/10 text-white/70 border border-white/10">
+                                {{ getTargetCategory(target) }}
+                            </span>
+                        </div>
+                        <div class="flex items-center space-x-1.5 flex-shrink-0">
+                            <select :value="getTargetCategory(target)" @change="updateTargetCategory(target, $event.target.value)" class="bg-white/5 border border-white/10 text-[11px] rounded-lg px-2 py-1 text-white/80 focus:border-acidBright outline-none">
+                                <option value="nft">NFT</option>
+                                <option value="defi">DeFi</option>
+                                <option value="airdrop">Airdrop</option>
+                                <option value="nodes">Nodes</option>
+                            </select>
+                            <button @click="deleteParserTarget(target)" class="text-red-500 bg-red-500/10 hover:bg-red-500/20 p-1.5 rounded-lg transition-all active:scale-90" title="Удалить">
+                                <i class="ph-bold ph-trash text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div v-else class="text-center py-4 text-xs text-white/40 bg-[#0a0d02]/50 rounded-xl border border-white/5">
+                    {{ parserTargetsList.length === 0 ? 'Список целей пуст' : 'Нет целей в выбранной категории' }}
+                </div>
+
+                <!-- Add Target Section -->
+                <div class="space-y-2 pt-2 border-t border-white/10">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs text-white/60">Категория для новых целей:</label>
+                        <select v-model="newTargetCategory" class="bg-[#0a0d02] border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white outline-none focus:border-acidBright">
+                            <option value="nft">NFT</option>
+                            <option value="defi">DeFi</option>
+                            <option value="airdrop">Airdrop</option>
+                            <option value="nodes">Nodes</option>
+                        </select>
+                    </div>
+                    <p class="text-xs text-white/50">Ссылки на Twitter (каждая с новой строки):</p>
+                    <textarea v-model="parserTargetsText" class="w-full bg-[#0a0d02] border border-white/10 rounded-xl px-3 py-2.5 text-white outline-none focus:border-acidBright h-24 text-sm resize-none" placeholder="https://x.com/project1&#10;https://x.com/project2"></textarea>
+                </div>
+
+                <div class="flex space-x-3 pt-1">
+                    <button class="flex-1 bg-white/5 hover:bg-white/10 py-3 rounded-xl font-bold text-sm text-white" @click="showParserModal = false">Отмена</button>
+                    <button class="flex-1 bg-acidBright hover:bg-acidBright/90 text-black py-3 rounded-xl font-bold text-sm shadow-[0_0_12px_rgba(186,255,41,0.4)]" @click="saveParserTargets">Добавить</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADD TRACKED PROFILE MODAL -->
+        <div v-if="showAddTrackedProfileModal" class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
+            <div class="bg-[#1f2316] border border-white/10 rounded-2xl p-5 w-full max-w-sm space-y-4">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-2">
+                        <i class="ph-bold ph-x-logo text-acidBright text-lg"></i>
+                        <h3 class="font-bold text-base text-white">Отслеживание профилей Х</h3>
+                    </div>
+                    <button @click="showAddTrackedProfileModal = false" class="text-white/50 hover:text-white">
+                        <i class="ph-bold ph-x text-lg"></i>
+                    </button>
+                </div>
+
+                <div class="bg-[#0a0d02] p-3 rounded-xl border border-white/5 flex items-center justify-between text-xs">
+                    <span class="text-white/70">Лимит профилей:</span>
+                    <span v-if="isAdmin" class="font-bold text-acidBright">
+                        {{ userTrackedProfiles.length }} (Безлимит для админа)
+                    </span>
+                    <span v-else class="font-bold" :class="userTrackedProfiles.length >= 5 ? 'text-amber-400' : 'text-acidBright'">
+                        {{ userTrackedProfiles.length }} / 5 ({{ Math.max(0, 5 - userTrackedProfiles.length) }} свободно)
+                    </span>
+                </div>
+
+                <div v-if="addTrackedErrorMsg" class="bg-red-500/20 border border-red-500/40 text-red-200 text-xs p-2.5 rounded-xl">
+                    {{ addTrackedErrorMsg }}
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs text-white/60">Категория:</label>
+                        <select v-model="addTrackedCategory" class="bg-[#0a0d02] border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white outline-none focus:border-acidBright">
+                            <option value="nft">NFT</option>
+                            <option value="defi">DeFi</option>
+                            <option value="airdrop">Airdrop</option>
+                            <option value="nodes">Nodes</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-white/60 block mb-1">
+                            Ссылки на профили или @username (каждый с новой строки):
+                        </label>
+                        <textarea v-model="addTrackedInput" 
+                                  rows="4" 
+                                  class="w-full bg-[#0a0d02] border border-white/10 rounded-xl px-3 py-2 text-white outline-none focus:border-acidBright text-sm resize-none" 
+                                  placeholder="@username&#10;https://x.com/project_name"></textarea>
+                    </div>
+
+                    <p class="text-[10px] text-white/40 leading-relaxed">
+                        <span v-if="isAdmin">👑 Режим администратора: добавление без ограничений.</span>
+                        <span v-else>ℹ️ Максимум 5 активных профилей на аккаунт на срок до 15 дней. Профили из календаря учитываются в общем лимите.</span>
+                    </p>
+                </div>
+
+                <div class="flex space-x-3 pt-1">
+                    <button class="flex-1 bg-white/5 hover:bg-white/10 py-3 rounded-xl font-bold text-sm text-white" 
+                            @click="showAddTrackedProfileModal = false">
+                        Отмена
+                    </button>
+                    <button :disabled="addTrackedSaving || (!isAdmin && userTrackedProfiles.length >= 5)" 
+                            class="flex-1 bg-acidBright hover:bg-acidBright/90 disabled:opacity-50 text-black py-3 rounded-xl font-bold text-sm shadow-[0_0_12px_rgba(186,255,41,0.4)] transition-all" 
+                            @click="submitAddTrackedProfile">
+                        {{ addTrackedSaving ? 'Сохранение...' : 'Добавить' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CALENDAR ADD MODAL -->
+        <div v-if="showCalendarModal" class="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4">
+            <div class="bg-[#1f2316] border border-white/10 rounded-2xl p-5 w-full max-w-sm max-h-[85vh] overflow-y-auto space-y-4 shadow-2xl">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-lg text-white">📅 {{ t("add_event") }}</h3>
+                    <button @click="showCalendarModal = false" class="text-white/50 hover:text-white p-1">
+                        <i class="ph-bold ph-x text-lg"></i>
+                    </button>
+                </div>
+
+                <!-- Error Notice if validation failed -->
+                <div v-if="calendarErrorMsg" class="p-3 bg-red-500/15 border border-red-500/30 rounded-xl text-red-400 text-xs flex items-center space-x-2.5">
+                    <i class="ph-bold ph-warning-circle text-lg flex-shrink-0"></i>
+                    <span class="leading-tight">{{ calendarErrorMsg }}</span>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="text-xs text-white/60 mb-1 block">{{ t("event_project") }} *</label>
+                        <input type="text" v-model="calendarForm.project_name" @input="calendarErrorMsg = ''" class="w-full bg-[#0a0d02] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-acidBright" placeholder="Например: Pudgy Penguins">
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-white/60 mb-1 block">{{ t("event_username") }}</label>
+                        <input type="text" v-model="calendarForm.username" @input="calendarErrorMsg = ''" class="w-full bg-[#0a0d02] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-acidBright" placeholder="pudgypenguins">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-xs text-white/60 mb-1 block">{{ t("event_type") }} *</label>
+                            <select v-model="calendarForm.event_type" class="w-full bg-[#0a0d02] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-acidBright">
+                                <option value="mint">🔨 Mint</option>
+                                <option value="tge">🚀 TGE</option>
+                                <option value="checker">🔍 Checker</option>
+                                <option value="whitelist">🎟️ Whitelist</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-white/60 mb-1 block">{{ t("event_date") }} *</label>
+                            <input type="datetime-local" v-model="calendarForm.event_date" @input="calendarErrorMsg = ''" class="w-full bg-[#0a0d02] border border-white/10 rounded-xl px-2 py-2 text-xs text-white outline-none focus:border-acidBright">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-white/60 mb-1 block">{{ t("event_details") }}</label>
+                        <textarea v-model="calendarForm.details" rows="2" class="w-full bg-[#0a0d02] border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-acidBright resize-none" placeholder="Условия, цена, сапплай, чекер..."></textarea>
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-white/60 mb-1 block">{{ t("event_tweet_url") }}</label>
+                        <input type="url" v-model="calendarForm.tweet_url" class="w-full bg-[#0a0d02] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-acidBright" placeholder="https://...">
+                    </div>
+
+                    <!-- Profile Watcher Toggle -->
+                    <div class="pt-1 bg-[#0a0d02]/70 p-3 rounded-xl border border-white/5 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div class="text-xs font-bold text-white flex items-center space-x-1.5">
+                                    <span>📡 {{ t("track_profile_label") }}</span>
+                                </div>
+                                <div class="text-[10px] text-white/50 leading-tight mt-0.5">
+                                    {{ t("track_profile_sub") }}
+                                </div>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-2">
+                                <input type="checkbox" v-model="calendarForm.track_profile" class="sr-only peer" :disabled="!isAdmin && calendarTrackedCount >= 5 && !calendarForm.track_profile">
+                                <div class="w-10 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-white/20 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-acidBright"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between text-[10px] pt-1 border-t border-white/5">
+                            <span class="text-white/40">{{ t("tracking_quota") }}:</span>
+                            <span v-if="isAdmin" class="text-acidBright font-bold">
+                                {{ calendarTrackedCount }} (👑 Безлимит)
+                            </span>
+                            <span v-else :class="calendarTrackedCount >= 5 ? 'text-red-400 font-bold' : 'text-acidBright font-bold'">
+                                {{ calendarTrackedCount }}/5 {{ calendarTrackedCount >= 5 ? '⚠️ (Лимит)' : '' }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex space-x-3 pt-2">
+                    <button class="flex-1 bg-white/5 hover:bg-white/10 py-3 rounded-xl font-bold text-sm text-white" @click="showCalendarModal = false" :disabled="calendarSaving">
+                        {{ t("cancel") }}
+                    </button>
+                    <button class="flex-1 bg-acidBright hover:bg-acidBright/90 text-black py-3 rounded-xl font-bold text-sm shadow-[0_0_12px_rgba(186,255,41,0.4)] disabled:opacity-50 flex items-center justify-center space-x-1.5" :disabled="calendarSaving" @click="saveCalendarEvent">
+                        <i v-if="calendarSaving" class="ph-bold ph-spinner animate-spin"></i>
+                        <span>{{ calendarSaving ? (lang === 'ru' ? 'Сохранение...' : 'Saving...') : t("save") }}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- DAY DETAILS MODAL -->
+        <div v-if="showDayDetailsModal" class="fixed inset-0 bg-black/85 z-[100] flex items-center justify-center p-4">
+            <div class="bg-[#1f2316] border border-white/10 rounded-2xl p-5 w-full max-w-md max-h-[90vh] flex flex-col space-y-4">
+                <!-- Top Title & Close -->
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h3 class="font-bold text-base text-white flex items-center space-x-2">
+                            <span>📅</span>
+                            <span>{{ formatDayHeader(selectedDate) }}</span>
+                        </h3>
+                        <div class="text-xs text-white/50">
+                            {{ dayDetailsEvents.length }} {{ lang === 'ru' ? 'событий запланировано' : 'events scheduled' }}
+                        </div>
+                    </div>
+                    <button @click="showDayDetailsModal = false" class="text-white/50 hover:text-white p-1">
+                        <i class="ph-bold ph-x text-lg"></i>
+                    </button>
+                </div>
+
+                <!-- Section / Category Tabs -->
+                <div class="flex space-x-2 overflow-x-auto pb-1 scrollbar-none border-b border-white/5">
+                    <button @click="dayDetailsFilter = 'all'" :class="dayDetailsFilter === 'all' ? 'bg-acidBright text-black font-bold shadow-[0_0_10px_rgba(186,255,41,0.3)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-3 py-1.5 rounded-xl text-xs whitespace-nowrap transition-all">
+                        {{ t("filter_all") }} ({{ dayDetailsEvents.length }})
+                    </button>
+                    <button @click="dayDetailsFilter = 'mint'" :class="dayDetailsFilter === 'mint' ? 'bg-acidBright text-black font-bold shadow-[0_0_10px_rgba(186,255,41,0.3)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-3 py-1.5 rounded-xl text-xs whitespace-nowrap transition-all">
+                        🔨 {{ t("filter_mint") }} ({{ countDayByType('mint') }})
+                    </button>
+                    <button @click="dayDetailsFilter = 'tge'" :class="dayDetailsFilter === 'tge' ? 'bg-purple-500 text-white font-bold shadow-[0_0_10px_rgba(168,85,247,0.4)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-3 py-1.5 rounded-xl text-xs whitespace-nowrap transition-all">
+                        🚀 {{ t("filter_tge") }} ({{ countDayByType('tge') }})
+                    </button>
+                    <button @click="dayDetailsFilter = 'checker'" :class="dayDetailsFilter === 'checker' ? 'bg-amber-500 text-black font-bold shadow-[0_0_10px_rgba(245,158,11,0.4)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-3 py-1.5 rounded-xl text-xs whitespace-nowrap transition-all">
+                        🔍 {{ t("filter_checker") }} ({{ countDayByType('checker') }})
+                    </button>
+                    <button @click="dayDetailsFilter = 'whitelist'" :class="dayDetailsFilter === 'whitelist' ? 'bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)]' : 'bg-white/5 text-white/70 hover:bg-white/10'" class="px-3 py-1.5 rounded-xl text-xs whitespace-nowrap transition-all">
+                        🎟️ {{ t("filter_whitelist") }} ({{ countDayByType('whitelist') }})
+                    </button>
+                </div>
+
+                <!-- Event Cards inside Modal -->
+                <div class="overflow-y-auto space-y-3 pr-1 max-h-[50vh]">
+                    <div v-if="filteredDayEvents.length === 0" class="text-center py-8 text-white/40">
+                        <i class="ph-fill ph-calendar-x text-3xl mb-2 text-white/20"></i>
+                        <div class="text-xs">{{ t("no_events") }}</div>
+                    </div>
+
+                    <div v-for="event in filteredDayEvents" :key="event.id" class="main-card rounded-2xl p-3.5 border border-white/5 hover:border-acidBright/30 transition-all space-y-2.5">
+                        <div class="flex items-start justify-between">
+                            <div class="space-y-0.5">
+                                <div class="flex items-center space-x-2">
+                                    <span class="font-bold text-white text-sm">{{ event.project_name }}</span>
+                                    <span :class="getEventTypeBadgeClass(event.event_type)" class="text-[9px] font-bold px-2 py-0.5 rounded-full">
+                                        {{ getEventTypeLabel(event.event_type) }}
+                                    </span>
+                                </div>
+                                <div v-if="event.username" class="text-xs">
+                                    <a :href="'https://x.com/' + event.username.replace(/^@/, '')" target="_blank" class="text-acidBright hover:underline flex items-center space-x-1">
+                                        <span>@{{ event.username.replace(/^@/, '') }}</span>
+                                        <i class="ph-bold ph-arrow-square-out text-[10px]"></i>
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-[11px] font-mono bg-white/5 border border-white/10 px-2 py-0.5 rounded-lg text-white/80">
+                                    {{ formatEventTime(event.event_date) }}
+                                </span>
+                                <button @click="deleteCalendarEvent(event.id)" class="text-red-500 bg-red-500/10 hover:bg-red-500/20 p-1.5 rounded-lg transition-all active:scale-90" title="Удалить">
+                                    <i class="ph-bold ph-trash text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <p v-if="event.details" class="text-xs text-white/70 bg-[#0a0d02]/60 p-2 rounded-xl border border-white/5 whitespace-pre-wrap">
+                            {{ event.details }}
+                        </p>
+
+                        <!-- Footer with URL and Profile Tracking Switch -->
+                        <div class="pt-1 flex items-center justify-between border-t border-white/5 text-xs">
+                            <!-- Tracking Toggle Switch -->
+                            <div class="flex items-center space-x-2">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" :checked="event.track_profile == 1" @change="toggleEventTracking(event)" class="sr-only peer" :disabled="!isAdmin && event.track_profile != 1 && calendarTrackedCount >= 5">
+                                    <div class="w-8 h-4 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-white/20 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-acidBright"></div>
+                                </label>
+                                <span class="text-[10px]" :class="event.track_profile == 1 ? 'text-acidBright font-bold' : 'text-white/40'">
+                                    {{ event.track_profile == 1 ? '📡 Отслеживается' : '📡 Не отслеживается' }}
+                                </span>
+                            </div>
+
+                            <a v-if="event.tweet_url" :href="event.tweet_url" target="_blank" class="inline-flex items-center space-x-1 text-[11px] text-acidBright bg-acidBright/10 hover:bg-acidBright/20 border border-acidBright/20 px-2.5 py-1 rounded-lg transition-all font-bold">
+                                <span>{{ t("open_tweet") }}</span>
+                                <i class="ph-bold ph-arrow-square-out text-[10px]"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Footer -->
+                <div class="flex space-x-2 pt-2 border-t border-white/5">
+                    <button @click="openAddEventForDate(selectedDate)" class="flex-1 bg-acidBright text-black py-2.5 rounded-xl font-bold text-xs flex items-center justify-center space-x-1.5 shadow-[0_0_12px_rgba(186,255,41,0.3)]">
+                        <i class="ph-bold ph-plus text-sm"></i>
+                        <span>{{ t("add_event_for_day") }}</span>
+                    </button>
+                    <button @click="showDayDetailsModal = false" class="bg-white/5 hover:bg-white/10 text-white px-4 py-2.5 rounded-xl font-bold text-xs">
+                        {{ t("cancel") }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Floating Bottom Dock -->
+        <div v-show="profileName && ['home', 'collections', 'coins', 'nfts', 'evm', 'solana', 'calendar'].includes(currentView)" class="fixed bottom-0 left-0 right-0 nav-dock flex justify-around items-center px-2 z-50 pb-2 pt-2">
+            <button class="flex flex-col items-center p-3 transition-colors" :class="currentView === 'home' ? 'text-acidBright' : 'text-white/30 hover:text-white/80'" @click="currentView = 'home'">
+                <i class="ph-fill ph-house text-2xl mb-1" :class="currentView === 'home' ? 'drop-shadow-[0_0_8px_rgba(186,255,41,0.6)]' : ''"></i>
+                <span class="text-[9px] font-bold">{{t("home")}}</span>
+            </button>
+            <button class="flex flex-col items-center p-3 transition-colors" :class="['collections', 'coins'].includes(currentView) ? 'text-acidBright' : 'text-white/30 hover:text-white/80'" @click="currentView = 'collections'">
+                <i class="ph-fill ph-coins text-2xl mb-1" :class="['collections', 'coins'].includes(currentView) ? 'drop-shadow-[0_0_8px_rgba(186,255,41,0.6)]' : ''"></i>
+                <span class="text-[9px] font-bold">{{t("tokens")}}</span>
+            </button>
+            <button class="flex flex-col items-center p-3 transition-colors" :class="currentView === 'nfts' ? 'text-acidBright' : 'text-white/30 hover:text-white/80'" @click="currentView = 'nfts'">
+                <i class="ph-fill ph-image text-2xl mb-1" :class="currentView === 'nfts' ? 'drop-shadow-[0_0_8px_rgba(186,255,41,0.6)]' : ''"></i>
+                <span class="text-[9px] font-bold">{{t("nfts")}}</span>
+            </button>
+            <button class="flex flex-col items-center p-3 transition-colors" :class="['evm', 'solana', 'wallet_evm_detail', 'wallet_sol_detail', 'wallet_add'].includes(currentView) ? 'text-acidBright' : 'text-white/30 hover:text-white/80'" @click="currentView = 'evm'">
+                <i class="ph-fill ph-wallet text-2xl mb-1" :class="['evm', 'solana', 'wallet_evm_detail', 'wallet_sol_detail', 'wallet_add'].includes(currentView) ? 'drop-shadow-[0_0_8px_rgba(186,255,41,0.6)]' : ''"></i>
+                <span class="text-[9px] font-bold">{{t("evm")}}</span>
+            </button>
+            <button class="flex flex-col items-center p-3 transition-colors" :class="currentView === 'calendar' ? 'text-acidBright' : 'text-white/30 hover:text-white/80'" @click="currentView = 'calendar'">
+                <i class="ph-fill ph-calendar text-2xl mb-1" :class="currentView === 'calendar' ? 'drop-shadow-[0_0_8px_rgba(186,255,41,0.6)]' : ''"></i>
+                <span class="text-[9px] font-bold">{{t("calendar")}}</span>
+            </button>
+        </div>
+
+        <div v-if="promptModal.show" class="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
+            <div class="bg-[#1f2316] border border-white/10 rounded-2xl p-5 w-full max-w-sm">
+                <h3 class="font-bold text-lg mb-4">{{promptModal.title}}</h3>
+                <input type="text" v-model="promptModal.value" class="w-full bg-[#0a0d02] border border-white/10 rounded-xl px-4 py-3 text-white mb-6 outline-none focus:border-acidBright" :placeholder="promptModal.placeholder">
+                <div class="flex space-x-3">
+                    <button class="flex-1 bg-white/5 hover:bg-white/10 py-3 rounded-xl font-bold" @click="promptModal.resolve(null); promptModal.show=false">{{t('cancel')}}</button>
+                    <button class="flex-1 bg-acidBright text-black py-3 rounded-xl font-bold" @click="promptModal.resolve(promptModal.value); promptModal.show=false">{{t('save')}}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    promptModal: { show: false, title: '', value: '', placeholder: '', resolve: null },
+                    isAdmin: false, showStatsModal: false, showParserModal: false, adminStats: null, parserTargetsText: '', parserTargetsList: [],
+                    currentView: 'lang',
+                    isTutorial: false,
+                    tutorialStep: 1,
+                    lang: 'en',
+                    calendarEvents: [],
+                    calendarFilter: 'all',
+                    showCalendarModal: false,
+                    showDayDetailsModal: false,
+                    calendarLoading: false,
+                    calendarCurrentYear: new Date().getFullYear(),
+                    calendarCurrentMonth: new Date().getMonth(),
+                    selectedDate: '',
+                    dayDetailsEvents: [],
+                    dayDetailsFilter: 'all',
+                    calendarTrackedCount: 0,
+                    calendarMaxTracking: 5,
+                    hoveredDateObj: null,
+                    calendarForm: { project_name: '', username: '', event_type: 'mint', event_date: '', details: '', tweet_url: '', track_profile: false },
+                    calendarErrorMsg: '',
+                    calendarSaving: false,
+                    targetCategoryFilter: 'all',
+                    newTargetCategory: 'nft',
+
+                    userTrackedProfiles: [],
+                    userTrackedCount: 0,
+                    userTrackedMax: 5,
+                    userTrackedLoading: false,
+                    showAddTrackedProfileModal: false,
+                    addTrackedInput: '',
+                    addTrackedCategory: 'nft',
+                    addTrackedErrorMsg: '',
+                    addTrackedSaving: false,
+
+                    dict: {
+                        en: {
+                            welcome: "Welcome",
+                            select_lang: "Please select your language to continue",
+                            balance: "balance",
+                            trackers: "Trackers",
+                            limit: "Limit",
+                            tokens: "tokens",
+                            nfts: "nfts",
+                            evm: "evm",
+                            solana: "solana",
+                            in_process: "In process",
+                            logs: "Logs",
+                            all: "All",
+                            tracker: "tracker",
+                            threshold: "threshold",
+                            active_sonars: "active sonars",
+                            back: "Back",
+                            live: "Live",
+                            stop_tracking: "Stop Tracking",
+                                                        collections_title: "Collections",
+                            create_collection: "+ Create Collection",
+                            set_target_chat: "Set Target Chat",
+                            collection_fallback: "Collection",
+                            add_token: "+ Add Token",
+                            add_token_title: "Add Token",
+                            search_placeholder: "Ticker or Smart Contract",
+                            nothing_found: "Ничего не найдено",
+                            change: "Изменение",
+                            alert_deviation: "Отклонение цены для алерта (%)",
+                            alert_deviation_placeholder: "Например: 5",
+                            save_tracker: "Сохранить трекер",
+                            no_nfts_tracked: "Нет отслеживаемых NFT",
+                            add_nft_alert: "+ Добавить NFT Алерт",
+                            alert_history: "История алертов",
+                            edit_alert: "Изменить алерт",
+                            delete_alert: "Удалить алерт",
+                            add_nft: "Добавить NFT",
+                            add_opensea_url: "Добавить URL коллекции OpenSea",
+                            threshold_percent: "Порог %",
+                            fetch_save: "Найти и Сохранить",
+                            evm_wallets: "EVM Кошельки",
+                            no_evm_tracked: "Нет отслеживаемых EVM кошельков",
+                            evm_wallet_fallback: "EVM Кошелек",
+                            add_wallet: "+ Добавить кошелек",
+                            solana_wallets: "Solana Кошельки",
+                            no_solana_tracked: "Нет отслеживаемых Solana кошельков",
+                            solana_wallet_fallback: "Solana Кошелек",
+                            address: "Адрес",
+                            swaps: "Свапы",
+                            transfers: "Трансферы",
+                            nfts_filter: "NFTs",
+                            mints: "Mints",
+                            on: "ON",
+                            off: "OFF",
+                            delete_wallet: "Delete Wallet",
+                            add_wallet_title: "Add Wallet",
+                            address_placeholder: "Address",
+                            name_placeholder: "Name",
+                            save: "Save",
+                            market_cap: "Market Cap",
+                            vol_24h: "24h Vol",
+                            change_24h: "24h Change",
+                            fdv: "FDV",
+                            tut_create_coll: "Create a token collection to track prices",
+                            tut_skip: "Skip",
+                            tut_next: "Next",
+                            tut_add_nft: "Add NFTs to track their floor price",
+                            tut_track_evm: "Track transactions and swaps in EVM wallets",
+                            tut_track_solana: "Monitor Solana wallet activity in real time",
+                            tut_finish: "Finish",
+                            create_profile: "Create Profile",
+                            create_profile_desc: "To start working with trackers, please create your first profile.",
+                            create_profile_btn: "Create profile",
+                            search_token: "Search token...",
+                            home: "Home"
+                        ,
+                            edit_alert_pct: "Edit Alert %",
+                            delete_tracker: "Delete Tracker",
+                            no_chart_data: "No data for chart",
+                            prompt_new_trigger: "New Trigger %",
+                            prompt_new_target_chat: "New Target Chat",
+                            history_for: "History for",
+                            will_be_shown_here: "will be shown here",
+                            prompt_new_threshold: "New Threshold %",
+                            prompt_coll_name: "Collection Name",
+                            prompt_new_coll: "New Collection",
+                            prompt_new_target_chat_for: "New Target Chat for",
+                            collections_count: "collections",
+                            calendar: "Calendar",
+                            calendar_events: "Calendar",
+                            calendar_desc: "Upcoming mints, TGEs & check dates",
+                            add_event: "+ Add Event",
+                            filter_all: "All",
+                            filter_mint: "Mints",
+                            filter_tge: "TGE",
+                            filter_checker: "Checkers",
+                            filter_whitelist: "Whitelists",
+                            no_events: "No upcoming events found",
+                            open_tweet: "Open Tweet",
+                            event_project: "Project Name",
+                            event_username: "Twitter Handle (@...)",
+                            event_type: "Event Type",
+                            event_date: "Date & Time",
+                            event_details: "Details / Notes",
+                            event_tweet_url: "URL",
+                            track_profile_label: "Track profile updates & announcements",
+                            track_profile_sub: "Monitors mint alerts, announcements & link changes (up to 15 days or event date)",
+                            tracking_quota: "Profile tracking",
+                            quota_limit_reached: "Tracking quota reached: 5/5 profiles. Disable one to activate another.",
+                            today: "Today",
+                            mon: "Mo", tue: "Tu", wed: "We", thu: "Th", fri: "Fr", sat: "Sa", sun: "Su",
+                            events_on: "Events on",
+                            no_events_on_day: "No events scheduled for this day",
+                            add_event_for_day: "+ Add event for this day",
+                            upcoming_events: "Upcoming Events",
+                            view: "View",
+                            cancel: "Cancel",
+                            save: "Save"},
+                        ru: {
+                            welcome: "Добро пожаловать",
+                            select_lang: "Пожалуйста, выберите язык для продолжения",
+                            balance: "баланс",
+                            trackers: "Трекеры",
+                            limit: "Лимит",
+                            tokens: "токены",
+                            nfts: "nfts",
+                            evm: "evm",
+                            solana: "солана",
+                            in_process: "В процессе",
+                            logs: "Логи",
+                            all: "Все",
+                            tracker: "трекер",
+                            threshold: "порог",
+                            active_sonars: "активные сонары",
+                            back: "Назад",
+                            live: "Активен",
+                            stop_tracking: "Остановить слежение",
+                                                        collections_title: "Коллекции",
+                            create_collection: "+ Создать коллекцию",
+                            set_target_chat: "Чат для алертов",
+                            collection_fallback: "Коллекция",
+                            add_token: "+ Добавить токен",
+                            add_token_title: "Добавить токен",
+                            search_placeholder: "Тикер или смарт-контракт",
+                            nothing_found: "Ничего не найдено",
+                            change: "Изменить",
+                            alert_deviation: "Отклонение цены для алерта (%)",
+                            alert_deviation_placeholder: "Например: 5",
+                            save_tracker: "Сохранить трекер",
+                            no_nfts_tracked: "Нет отслеживаемых NFT",
+                            add_nft_alert: "+ Добавить алерт NFT",
+                            alert_history: "История алертов",
+                            edit_alert: "Изменить алерт",
+                            delete_alert: "Удалить алерт",
+                            add_nft: "Добавить NFT",
+                            add_opensea_url: "URL коллекции OpenSea",
+                            threshold_percent: "Порог (%)",
+                            fetch_save: "Найти и Сохранить",
+                            evm_wallets: "Кошельки EVM",
+                            no_evm_tracked: "Нет отслеживаемых кошельков EVM",
+                            evm_wallet_fallback: "Кошелек EVM",
+                            add_wallet: "+ Добавить кошелек",
+                            solana_wallets: "Кошельки Solana",
+                            no_solana_tracked: "Нет отслеживаемых кошельков Solana",
+                            solana_wallet_fallback: "Кошелек Solana",
+                            address: "Адрес",
+                            swaps: "Свапы",
+                            transfers: "Переводы",
+                            nfts_filter: "NFT",
+                            mints: "Минты",
+                            on: "ВКЛ",
+                            off: "ВЫКЛ",
+                            delete_wallet: "Удалить кошелек",
+                            add_wallet_title: "Добавить кошелек",
+                            address_placeholder: "Адрес",
+                            name_placeholder: "Имя",
+                            save: "Сохранить",
+                            market_cap: "Капитализация",
+                            vol_24h: "Объем (24ч)",
+                            change_24h: "Изм. (24ч)",
+                            fdv: "FDV",
+                            tut_create_coll: "Создайте коллекцию токенов для отслеживания цены",
+                            tut_skip: "Пропустить",
+                            tut_next: "Далее",
+                            tut_add_nft: "Добавьте NFT для отслеживания цены и объема",
+                            tut_track_evm: "Отслеживайте транзакции EVM кошельков",
+                            tut_track_solana: "Отслеживайте транзакции Solana кошельков",
+                            tut_finish: "Завершить",
+                            create_profile: "Создайте профиль",
+                            create_profile_desc: "Чтобы начать работу с трекерами, пожалуйста, создайте свой первый профиль.",
+                            create_profile_btn: "Создать профиль",
+                            search_token: "Поиск токена...",
+                            home: "Главная"
+                        ,
+                            edit_alert_pct: "Изменить % алерта",
+                            delete_tracker: "Удалить трекер",
+                            no_chart_data: "Нет данных для графика",
+                            prompt_new_trigger: "Новый % триггера",
+                            prompt_new_target_chat: "Новый чат для алертов",
+                            history_for: "История для",
+                            will_be_shown_here: "будет показана здесь",
+                            prompt_new_threshold: "Новый порог %",
+                            prompt_coll_name: "Имя коллекции",
+                            prompt_new_coll: "Новая коллекция",
+                            prompt_new_target_chat_for: "Новый чат для алертов для",
+                            collections_count: "коллекций",
+                            calendar: "Календарь",
+                            calendar_events: "Календарь событий",
+                            calendar_desc: "Ближайшие минты, TGE и чекеры",
+                            add_event: "+ Добавить",
+                            filter_all: "Все",
+                            filter_mint: "Минты",
+                            filter_tge: "TGE",
+                            filter_checker: "Чекеры",
+                            filter_whitelist: "Вайтлисты",
+                            no_events: "Нет запланированных событий",
+                            open_tweet: "Открыть твит",
+                            event_project: "Название проекта",
+                            event_username: "Twitter ник (@...)",
+                            event_type: "Тип события",
+                            event_date: "Дата и время",
+                            event_details: "Детали / Описание",
+                            event_tweet_url: "URL",
+                            track_profile_label: "Отслеживать обновления и анонсы",
+                            track_profile_sub: "Мониторинг анонсов, важных дат и смены ссылок профиля (до 15 дней или до даты события)",
+                            tracking_quota: "Отслеживание профилей",
+                            quota_limit_reached: "Лимит исчерпан: максимум 5 активных профилей. Отключите один из существующих.",
+                            today: "Сегодня",
+                            mon: "Пн", tue: "Вт", wed: "Ср", thu: "Чт", fri: "Пт", sat: "Сб", sun: "Вс",
+                            events_on: "События на",
+                            no_events_on_day: "На этот день событий пока нет",
+                            add_event_for_day: "+ Запланировать на этот день",
+                            upcoming_events: "Событий в календаре",
+                            view: "Смотреть",
+                            cancel: "Отмена",
+                            save: "Сохранить"}
+                    },
+
+                    trackedCoins: [],
+                    collections: [],
+                    filteredCoins: [],
+                    trackedNFTs: [],
+                    evmWallets: [],
+                    solWallets: [],
+                    logs: [],
+                    selectedCollection: null, selectedCoin: null, selectedNft: null, selectedWallet: null, addForm: {}, profileName: null, showProfileModal: false, profileNameInput: '', searchQuery: '', searchResults: [], isSearching: false,
+                    chatMetadata: {}, selectedSearchResult: null,
+                    initData: '',
+                    userName: 'User', tgUsername: '', tgAvatar: '',
+                    mockCoins: [
+                        { id: 1, ticker: 'BTC', network: 'binance', baseline_price: '84029.01', trigger_percent: '1', icon: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png' },
+                        { id: 2, ticker: 'ETH', network: 'binance', baseline_price: '3120.45', trigger_percent: '2', icon: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png' },
+                        { id: 3, ticker: 'SOL', network: 'solana', baseline_price: '145.22', trigger_percent: '5', icon: 'https://assets.coingecko.com/coins/images/4128/small/solana.png' },
+                        { id: 4, ticker: 'ARB', network: 'binance', baseline_price: '0.82', trigger_percent: '3', icon: 'https://assets.coingecko.com/coins/images/16547/small/arbitrum.png' }
+                    ]
+                }
+            },
+            computed: {
+                filteredCalendarEvents() {
+                    if (!this.calendarEvents || !Array.isArray(this.calendarEvents)) return [];
+                    if (this.calendarFilter === 'all') return this.calendarEvents;
+                    return this.calendarEvents.filter(e => (e.event_type || '').toLowerCase() === this.calendarFilter.toLowerCase());
+                },
+                currentMonthName() {
+                    const monthsRu = ["Января", "Февраля", "Марта", "Апреля", "Мая", "Июня", "Июля", "Августа", "Сентября", "Октября", "Ноября", "Декабря"];
+                    const monthsEn = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                    return this.lang === 'ru' ? monthsRu[this.calendarCurrentMonth] : monthsEn[this.calendarCurrentMonth];
+                },
+                currentMonthYearName() {
+                    const monthsRu = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+                    const monthsEn = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                    const name = this.lang === 'ru' ? monthsRu[this.calendarCurrentMonth] : monthsEn[this.calendarCurrentMonth];
+                    return `${name} ${this.calendarCurrentYear}`;
+                },
+                calendarMonthPadding() {
+                    const firstDay = new Date(this.calendarCurrentYear, this.calendarCurrentMonth, 1).getDay();
+                    const offset = (firstDay + 6) % 7;
+                    return Array.from({ length: offset }, (_, i) => i);
+                },
+                calendarDaysMatrix() {
+                    const totalDays = new Date(this.calendarCurrentYear, this.calendarCurrentMonth + 1, 0).getDate();
+                    const today = new Date();
+                    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                    const days = [];
+
+                    for (let d = 1; d <= totalDays; d++) {
+                        const dateStr = `${this.calendarCurrentYear}-${String(this.calendarCurrentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                        const dayEvents = (this.calendarEvents || []).filter(e => {
+                            if (!e.event_date) return false;
+                            return e.event_date.slice(0, 10) === dateStr;
+                        });
+
+                        const counts = { mint: 0, tge: 0, checker: 0, whitelist: 0, total: dayEvents.length };
+                        for (const ev of dayEvents) {
+                            const t = (ev.event_type || 'mint').toLowerCase();
+                            if (counts[t] !== undefined) counts[t]++;
+                        }
+
+                        days.push({
+                            dayNumber: d,
+                            dateStr: dateStr,
+                            isToday: dateStr === todayStr,
+                            events: dayEvents,
+                            counts: counts
+                        });
+                    }
+                    return days;
+                },
+                filteredDayEvents() {
+                    if (!this.dayDetailsEvents || !Array.isArray(this.dayDetailsEvents)) return [];
+                    if (this.dayDetailsFilter === 'all') return this.dayDetailsEvents;
+                    return this.dayDetailsEvents.filter(e => (e.event_type || '').toLowerCase() === this.dayDetailsFilter.toLowerCase());
+                },
+                filteredParserTargetsList() {
+                    if (!this.parserTargetsList || !Array.isArray(this.parserTargetsList)) return [];
+                    if (this.targetCategoryFilter === 'all') return this.parserTargetsList;
+                    return this.parserTargetsList.filter(t => {
+                        const cat = (typeof t === 'object' && t !== null) ? (t.category || 'nft') : 'nft';
+                        return cat.toLowerCase() === this.targetCategoryFilter.toLowerCase();
+                    });
+                }
+            },
+            mounted() {
+                if (window.Telegram && window.Telegram.WebApp) {
+                    const tg = window.Telegram.WebApp;
+                    tg.ready();
+                    tg.expand();
+                    this.initData = tg.initData;
+                    if(tg.initDataUnsafe?.user) {
+                        this.userName = tg.initDataUnsafe.user.first_name || 'User';
+                        this.tgUsername = tg.initDataUnsafe.user.username ? '@' + tg.initDataUnsafe.user.username : '';
+                        this.tgAvatar = tg.initDataUnsafe.user.photo_url || '';
+                    }
+                    tg.setHeaderColor('#0a0d02');
+                    tg.setBackgroundColor('#0a0d02');
+                }
+                this.fetchData();
+                this.loadCalendarEvents();
+                this.loadUserTrackedProfiles();
+            },
+            methods: {
+                showPrompt(title, defaultValue = '') {
+                    return new Promise(resolve => {
+                        this.promptModal.title = title;
+                        this.promptModal.value = defaultValue;
+                        this.promptModal.placeholder = defaultValue;
+                        this.promptModal.resolve = resolve;
+                        this.promptModal.show = true;
+                    });
+                },
+                startTutorial() {
+                    if (!localStorage.getItem('tutorial_seen') && this.profileName) {
+                        this.isTutorial = true;
+                        this.tutorialStep = 1;
+                    }
+                },
+                nextTutorialStep() {
+                    if (this.tutorialStep < 4) {
+                        this.tutorialStep++;
+                    } else {
+                        this.skipTutorial();
+                    }
+                },
+                skipTutorial() {
+                    this.isTutorial = false;
+                    localStorage.setItem('tutorial_seen', 'true');
+                },
+                searchTokens: async function() {
+                    if(!this.searchQuery) return;
+                    this.isSearching = true;
+                    try {
+                        const res = await fetch('/api/miniapp/search_coin?q=' + encodeURIComponent(this.searchQuery), { headers: { 'x-telegram-init-data': window.Telegram?.WebApp?.initData || '' } });
+                        const data = await res.json();
+                        this.searchResults = data.results || [];
+                    } catch(e) { console.error(e); }
+                    this.isSearching = false;
+                },
+                selectSearchResult: function(res) {
+                    this.selectedSearchResult = res;
+                    this.addForm.ticker = res.ticker;
+                    this.addForm.network = res.network;
+                    this.addForm.contract_address = res.contract_address;
+                    this.addForm.trigger_percent = '5'; // default
+                    this.addForm.baseline_price = res.price;
+                    this.addForm.icon = res.icon;
+                },
+                apiCall: async function(url, method, body) {
+                    let chatId = '332680373';
+                    if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
+                        chatId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+                    }
+                    if(body) body.chat_id = chatId;
+                    try {
+                        const res = await fetch(url, {
+                            method,
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-telegram-init-data': window.Telegram?.WebApp?.initData || ''
+                            },
+                            body: body ? JSON.stringify(body) : undefined
+                        });
+                        await this.fetchData();
+                        return await res.json();
+                    } catch (e) {
+                        console.error('API call failed', e);
+                    }
+                },
+                saveCoin: async function() {
+                    if (this.selectedCollection) {
+                        this.addForm.collection_id = this.selectedCollection.id;
+                    }
+                    await this.apiCall('/api/miniapp/coins', 'POST', this.addForm);
+                    this.currentView = 'coins';
+                    this.addForm = {};
+                    this.searchQuery = '';
+                    this.searchResults = [];
+                    this.selectedSearchResult = null;
+                    await this.fetchData();
+                    if (this.selectedCollection) {
+                        this.filteredCoins = this.trackedCoins.filter(c => c.collection_id === this.selectedCollection.id);
+                    }
+                },
+                deleteCoin: async function(id) {
+                    await this.apiCall('/api/miniapp/coins/'+id, 'DELETE', {});
+                    this.currentView = 'coins';
+                    if (this.selectedCollection) {
+                        this.filteredCoins = this.trackedCoins.filter(c => c.collection_id === this.selectedCollection.id);
+                    }
+                },
+                editCoin: async function(coin) {
+                    const pct = await this.showPrompt(this.t('prompt_new_trigger'), coin.trigger_percent);
+                    if(pct) await this.apiCall('/api/miniapp/coins/'+coin.id, 'PUT', {trigger_percent: pct});
+                },
+                setTargetChat: async function(coin) {
+                    const ch = await this.showPrompt(this.t('prompt_new_target_chat'));
+                    if(ch) await this.apiCall('/api/miniapp/coins/'+coin.id+'/chat', 'PUT', {target_chat: ch});
+                },
+                saveNft: async function() {
+                    await this.apiCall('/api/miniapp/nfts', 'POST', this.addForm);
+                    this.currentView = 'nfts';
+                    this.addForm = {};
+                },
+                deleteNft: async function(id) {
+                    await this.apiCall('/api/miniapp/nfts/'+id, 'DELETE', {});
+                    this.currentView = 'nfts';
+                },
+                showNftHistory: function(nft) {
+                    alert(this.t('history_for') + ' ' + (nft.collection_name || nft.collection_slug) + ' ' + this.t('will_be_shown_here'));
+                },
+                editNft: async function(nft) {
+                    const pct = await this.showPrompt(this.t('prompt_new_threshold'), nft.threshold_percent);
+                    if(pct) await this.apiCall('/api/miniapp/nfts/'+nft.id, 'PUT', {threshold_percent: pct});
+                },
+                saveWallet: async function() {
+                    await this.apiCall('/api/miniapp/wallets/'+this.addForm.type, 'POST', this.addForm);
+                    this.currentView = this.addForm.type;
+                    this.addForm = {};
+                },
+                deleteWallet: async function(id, type) {
+                    await this.apiCall('/api/miniapp/wallets/'+type+'/'+id, 'DELETE', {});
+                    this.currentView = type;
+                },
+                toggleWalletFilter: async function(wallet, type, filterKey) {
+                    wallet[filterKey] = !wallet[filterKey];
+                    let payload = {
+                        filter_swaps: wallet.filter_swaps ? 1 : 0,
+                        filter_transfers: wallet.filter_transfers ? 1 : 0,
+                        filter_nfts: wallet.filter_nfts ? 1 : 0,
+                        filter_mints: wallet.filter_mints ? 1 : 0
+                    };
+                    await this.apiCall('/api/miniapp/wallets/'+type+'/'+wallet.id+'/filters', 'PUT', payload);
+                },
+
+                t(key) {
+                    return this.dict[this.lang][key] || key;
+                },
+
+                selectLang(l) {
+                    this.lang = l;
+                    this.currentView = 'home';
+                    this.startTutorial();
+                },
+
+                                async createProfile() {
+                    const name = await this.showPrompt(this.t('create_profile_btn'), 'Main');
+                    if (name) {
+                        await this.apiCall('/api/miniapp/profile', 'POST', { name });
+                        await this.fetchData();
+                    }
+                },
+                async deleteProfile() {
+                    if (confirm('Вы уверены, что хотите удалить профиль? Все ваши трекеры также будут удалены.')) {
+                        await this.apiCall('/api/miniapp/profile', 'DELETE', {});
+                        this.profileName = null;
+                        this.currentView = 'home';
+                        await this.fetchData();
+                    }
+                },
+                async fetchData() {
+                    try {
+                        let chatId = '332680373';
+                        if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
+                            chatId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+                        }
+                        this.isAdmin = (chatId === '332680373'); const res = await fetch(`/api/miniapp/data?chat_id=${chatId}`, { headers: { 'x-telegram-init-data': window.Telegram?.WebApp?.initData || '' } });
+                        const data = await res.json();
+                        this.profileName = data.profileName || null;
+                        this.collections = data.collections || [];
+                        this.trackedCoins = data.coins || [];
+                        this.trackedNFTs = data.nfts || [];
+                        this.evmWallets = data.evm || [];
+                        
+                    this.solWallets = data.sol || [];
+                    
+                    // Fetch chat metadata
+                    const uniqueChats = new Set();
+                    this.collections.forEach(c => {
+                       if (c.target_chat_id) {
+                          String(c.target_chat_id).split(',').filter(Boolean).forEach(id => uniqueChats.add(id.trim()));
+                       }
+                    });
+                    this.trackedCoins.forEach(c => {
+                       if (c.target_chat_id) {
+                          String(c.target_chat_id).split(',').filter(Boolean).forEach(id => uniqueChats.add(id.trim()));
+                       }
+                    });
+                    this.nfts.forEach(n => {
+                       if (n.chat_id) {
+                          uniqueChats.add(String(n.chat_id).trim());
+                       }
+                    });
+                    
+                    for (const id of uniqueChats) {
+                       if (!this.chatMetadata[id]) {
+                           fetch('/api/miniapp/chat_info/' + id).then(r=>r.json()).then(d => {
+                               this.chatMetadata[id] = d;
+                           }).catch(e=>{});
+                       }
+                    }
+
+                        this.logs = [];
+                        if (this.selectedCollection) {
+                            this.filteredCoins = this.trackedCoins.filter(c => c.collection_id === this.selectedCollection.id);
+                        }
+                        if (this.currentView === 'home') {
+                            this.startTutorial();
+                        }
+                    } catch (e) {
+                        console.error('Error fetching data', e);
+                    }
+                },
+
+                async loadAdminStats() {
+                    let chatId = '332680373';
+                    if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
+                        chatId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+                    }
+                    try {
+                        const res = await fetch('/api/miniapp/admin/stats?chat_id=' + chatId, { headers: { 'x-telegram-init-data': window.Telegram?.WebApp?.initData || '' } });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.adminStats = data.stats;
+                        }
+                    } catch(e) {}
+                },
+                getChatId() {
+                    if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+                        return window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+                    }
+                    return '332680373';
+                },
+                getTargetUsername(target) {
+                    if (!target) return '';
+                    if (typeof target === 'object' && target !== null) return target.username || '';
+                    return String(target).replace(/^@/, '');
+                },
+                getTargetCategory(target) {
+                    if (typeof target === 'object' && target !== null && target.category) return target.category;
+                    return 'nft';
+                },
+                formatEventDate(dateStr) {
+                    if (!dateStr) return '';
+                    try {
+                        const d = new Date(dateStr);
+                        if (isNaN(d.getTime())) return dateStr;
+                        return d.toLocaleString(this.lang === 'ru' ? 'ru-RU' : 'en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    } catch(e) {
+                        return dateStr;
+                    }
+                },
+                getEventTypeBadgeClass(type) {
+                    const t = (type || '').toLowerCase();
+                    switch (t) {
+                        case 'mint':
+                            return 'bg-acidBright/15 text-acidBright border border-acidBright/30 shadow-[0_0_10px_rgba(186,255,41,0.2)]';
+                        case 'tge':
+                            return 'bg-purple-500/20 text-purple-300 border border-purple-500/30';
+                        case 'checker':
+                            return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+                        case 'whitelist':
+                            return 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30';
+                        default:
+                            return 'bg-white/10 text-white/80 border border-white/20';
+                    }
+                },
+                getEventTypeLabel(type) {
+                    const t = (type || '').toLowerCase();
+                    switch (t) {
+                        case 'mint': return '🔨 MINT';
+                        case 'tge': return '🚀 TGE';
+                        case 'checker': return '🔍 CHECKER';
+                        case 'whitelist': return '🎟️ WHITELIST';
+                        default: return (type || '').toUpperCase();
+                    }
+                },
+                async loadParserTargets() {
+                    let chatId = this.getChatId();
+                    if (chatId !== '332680373') return;
+                    try {
+                        const res = await fetch('/api/miniapp/admin/targets?chat_id=' + chatId, {
+                            headers: { 'x-telegram-init-data': window.Telegram?.WebApp?.initData || '' }
+                        });
+                        const data = await res.json();
+                        if (data.targets) {
+                            this.parserTargetsList = data.targets;
+                        }
+                    } catch(e) {}
+                },
+                async deleteParserTarget(target) {
+                    let chatId = this.getChatId();
+                    if (chatId !== '332680373') return;
+                    const username = this.getTargetUsername(target);
+                    const id = (typeof target === 'object' && target !== null) ? target.id : undefined;
+                    if (!confirm('Удалить @' + username + '?')) return;
+                    try {
+                        const url = '/api/miniapp/admin/targets?chat_id=' + chatId + (id ? '&id=' + id : '&username=' + encodeURIComponent(username));
+                        const res = await fetch(url, {
+                            method: 'DELETE',
+                            headers: { 'x-telegram-init-data': window.Telegram?.WebApp?.initData || '' }
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            await this.loadParserTargets();
+                        }
+                    } catch(e) { alert('Ошибка сети'); }
+                },
+                async saveParserTargets() {
+                    let chatId = this.getChatId();
+                    if (chatId !== '332680373') return;
+                    if (!this.parserTargetsText.trim()) return;
+                    const urls = this.parserTargetsText.split('\n').map(s => s.trim()).filter(s => s);
+                    try {
+                        const res = await fetch('/api/miniapp/admin/parser_targets', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-telegram-init-data': window.Telegram?.WebApp?.initData || ''
+                            },
+                            body: JSON.stringify({ chat_id: chatId, urls, category: this.newTargetCategory })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            alert('Добавлено профилей: ' + data.added);
+                            this.showParserModal = false;
+                            this.parserTargetsText = '';
+                            await this.loadParserTargets();
+                        } else {
+                            alert('Ошибка: ' + (data.error || ''));
+                        }
+                    } catch(e) { alert('Ошибка сети'); }
+                },
+                async updateTargetCategory(target, category) {
+                    let chatId = this.getChatId();
+                    if (chatId !== '332680373') return;
+                    const username = this.getTargetUsername(target);
+                    const id = (typeof target === 'object' && target !== null) ? target.id : undefined;
+                    try {
+                        const res = await fetch('/api/miniapp/admin/targets/category', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-telegram-init-data': window.Telegram?.WebApp?.initData || ''
+                            },
+                            body: JSON.stringify({ chat_id: chatId, username, id, category })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            await this.loadParserTargets();
+                        } else {
+                            alert('Ошибка смены категории: ' + (data.error || ''));
+                        }
+                    } catch(e) {
+                        console.error('Error updating target category', e);
+                    }
+                },
+                prevCalendarMonth() {
+                    if (this.calendarCurrentMonth === 0) {
+                        this.calendarCurrentMonth = 11;
+                        this.calendarCurrentYear--;
+                    } else {
+                        this.calendarCurrentMonth--;
+                    }
+                },
+                nextCalendarMonth() {
+                    if (this.calendarCurrentMonth === 11) {
+                        this.calendarCurrentMonth = 0;
+                        this.calendarCurrentYear++;
+                    } else {
+                        this.calendarCurrentMonth++;
+                    }
+                },
+                goToToday() {
+                    const now = new Date();
+                    this.calendarCurrentYear = now.getFullYear();
+                    this.calendarCurrentMonth = now.getMonth();
+                },
+                onDayCellClick(day) {
+                    if (day.events.length > 0) {
+                        this.selectedDate = day.dateStr;
+                        this.dayDetailsEvents = day.events;
+                        this.dayDetailsFilter = 'all';
+                        this.showDayDetailsModal = true;
+                    } else {
+                        this.openAddEventForDate(day.dateStr);
+                    }
+                },
+                onDateQuickFilterClick(day, filterType) {
+                    this.selectedDate = day.dateStr;
+                    this.dayDetailsEvents = day.events;
+                    this.dayDetailsFilter = filterType;
+                    this.hoveredDateObj = null;
+                    this.showDayDetailsModal = true;
+                },
+                getDefaultEventDate(baseDateStr = null) {
+                    const now = new Date();
+                    if (baseDateStr) {
+                        const y = now.getFullYear();
+                        const m = String(now.getMonth() + 1).padStart(2, '0');
+                        const d = String(now.getDate()).padStart(2, '0');
+                        const todayStr = `${y}-${m}-${d}`;
+                        if (baseDateStr === todayStr) {
+                            const future = new Date(now.getTime() + 60 * 60 * 1000);
+                            const hh = String(future.getHours()).padStart(2, '0');
+                            const mm = String(Math.floor(future.getMinutes() / 15) * 15).padStart(2, '0');
+                            return `${baseDateStr}T${hh}:${mm}`;
+                        }
+                        return `${baseDateStr}T12:00`;
+                    }
+                    const future = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+                    const y = future.getFullYear();
+                    const m = String(future.getMonth() + 1).padStart(2, '0');
+                    const d = String(future.getDate()).padStart(2, '0');
+                    const hh = String(future.getHours()).padStart(2, '0');
+                    const mm = String(Math.floor(future.getMinutes() / 15) * 15).padStart(2, '0');
+                    return `${y}-${m}-${d}T${hh}:${mm}`;
+                },
+                openAddEventModalDefault() {
+                    this.calendarErrorMsg = '';
+                    const dateStr = this.getDefaultEventDate();
+                    this.calendarForm = { project_name: '', username: '', event_type: 'mint', event_date: dateStr, details: '', tweet_url: '', track_profile: false };
+                    this.showCalendarModal = true;
+                },
+                openAddEventForDate(dateStr) {
+                    this.calendarErrorMsg = '';
+                    this.showDayDetailsModal = false;
+                    const fullDateStr = this.getDefaultEventDate(dateStr);
+                    this.calendarForm = { 
+                        project_name: '', 
+                        username: '', 
+                        event_type: 'mint', 
+                        event_date: fullDateStr, 
+                        details: '', 
+                        tweet_url: '', 
+                        track_profile: false 
+                    };
+                    this.showCalendarModal = true;
+                },
+                openEventDayFromList(event) {
+                    if (!event.event_date) return;
+                    const dateStr = event.event_date.slice(0, 10);
+                    const dayEvents = (this.calendarEvents || []).filter(e => e.event_date && e.event_date.slice(0, 10) === dateStr);
+                    this.selectedDate = dateStr;
+                    this.dayDetailsEvents = dayEvents.length > 0 ? dayEvents : [event];
+                    this.dayDetailsFilter = 'all';
+                    this.showDayDetailsModal = true;
+                },
+                countDayByType(type) {
+                    if (!this.dayDetailsEvents) return 0;
+                    return this.dayDetailsEvents.filter(e => (e.event_type || '').toLowerCase() === type.toLowerCase()).length;
+                },
+                formatDayHeader(dateStr) {
+                    if (!dateStr) return '';
+                    try {
+                        const parts = dateStr.split('-');
+                        if (parts.length === 3) {
+                            const day = parseInt(parts[2], 10);
+                            const monthIdx = parseInt(parts[1], 10) - 1;
+                            const year = parts[0];
+                            const monthsRu = ["Января", "Февраля", "Марта", "Апреля", "Мая", "Июня", "Июля", "Августа", "Сентября", "Октября", "Ноября", "Декабря"];
+                            const monthsEn = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                            const m = this.lang === 'ru' ? monthsRu[monthIdx] : monthsEn[monthIdx];
+                            return `${day} ${m} ${year}`;
+                        }
+                    } catch(e) {}
+                    return dateStr;
+                },
+                formatEventTime(dateStr) {
+                    if (!dateStr) return '';
+                    if (dateStr.includes('T')) {
+                        return dateStr.split('T')[1].slice(0, 5);
+                    }
+                    return '';
+                },
+                async toggleEventTracking(event) {
+                    let chatId = this.getChatId();
+                    const newStatus = event.track_profile == 1 ? 0 : 1;
+                    try {
+                        const res = await fetch(`/api/miniapp/calendar/${event.id}/toggle_tracking?chat_id=${chatId}`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-telegram-init-data': window.Telegram?.WebApp?.initData || ''
+                            },
+                            body: JSON.stringify({ track_profile: newStatus === 1 })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            event.track_profile = data.track_profile;
+                            event.tracking_expires_at = data.tracking_expires_at;
+                            await this.loadCalendarEvents();
+                            await this.loadUserTrackedProfiles();
+                        } else {
+                            alert(data.error || 'Ошибка изменения статуса');
+                        }
+                    } catch(e) {
+                        alert('Ошибка сети: ' + e.message);
+                    }
+                },
+                async loadCalendarEvents() {
+                    this.calendarLoading = true;
+                    let chatId = this.getChatId();
+                    try {
+                        const res = await fetch(`/api/miniapp/calendar?chat_id=${chatId}`, {
+                            headers: { 'x-telegram-init-data': window.Telegram?.WebApp?.initData || '' }
+                        });
+                        const data = await res.json();
+                        this.calendarEvents = data.events || [];
+                        this.calendarTrackedCount = data.tracked_count || 0;
+                        this.userTrackedCount = data.tracked_count || 0;
+                        this.calendarMaxTracking = data.max_tracking !== undefined ? data.max_tracking : (this.isAdmin ? 999999 : 5);
+                        if (data.is_admin !== undefined) this.isAdmin = data.is_admin;
+                    } catch(e) {
+                        console.error('Error loading calendar events', e);
+                    } finally {
+                        this.calendarLoading = false;
+                    }
+                },
+                async saveCalendarEvent() {
+                    let chatId = this.getChatId();
+                    this.calendarErrorMsg = '';
+                    if (!this.calendarForm.project_name.trim() || !this.calendarForm.event_date) {
+                        this.calendarErrorMsg = this.lang === 'ru' ? 'Укажите название проекта и дату события' : 'Please provide project name and event date';
+                        return;
+                    }
+                    this.calendarSaving = true;
+                    try {
+                        const payload = {
+                            chat_id: chatId,
+                            project_name: this.calendarForm.project_name.trim(),
+                            username: this.calendarForm.username ? this.calendarForm.username.replace(/^@/, '').trim() : undefined,
+                            event_type: this.calendarForm.event_type || 'mint',
+                            event_date: this.calendarForm.event_date,
+                            details: this.calendarForm.details ? this.calendarForm.details.trim() : undefined,
+                            tweet_url: this.calendarForm.tweet_url ? this.calendarForm.tweet_url.trim() : undefined,
+                            track_profile: !!this.calendarForm.track_profile
+                        };
+                        const res = await fetch('/api/miniapp/calendar', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-telegram-init-data': window.Telegram?.WebApp?.initData || ''
+                            },
+                            body: JSON.stringify(payload)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showCalendarModal = false;
+                            this.calendarErrorMsg = '';
+                            this.calendarForm = { project_name: '', username: '', event_type: 'mint', event_date: '', details: '', tweet_url: '', track_profile: false };
+                            await this.loadCalendarEvents();
+                            await this.loadUserTrackedProfiles();
+                        } else {
+                            this.calendarErrorMsg = data.error || (this.lang === 'ru' ? 'Ошибка добавления' : 'Error adding event');
+                        }
+                    } catch(e) {
+                        this.calendarErrorMsg = (this.lang === 'ru' ? 'Ошибка сети: ' : 'Network error: ') + e.message;
+                    } finally {
+                        this.calendarSaving = false;
+                    }
+                },
+                async deleteCalendarEvent(id) {
+                    if (!confirm(this.lang === 'ru' ? 'Удалить это событие из календаря?' : 'Delete this calendar event?')) return;
+                    let chatId = this.getChatId();
+                    try {
+                        const res = await fetch(`/api/miniapp/calendar/${id}?chat_id=${chatId}`, {
+                            method: 'DELETE',
+                            headers: { 'x-telegram-init-data': window.Telegram?.WebApp?.initData || '' }
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            await this.loadCalendarEvents();
+                            await this.loadUserTrackedProfiles();
+                        } else {
+                            alert('Ошибка удаления: ' + (data.error || ''));
+                        }
+                    } catch(e) {
+                        alert('Ошибка сети: ' + e.message);
+                    }
+                },
+                async loadUserTrackedProfiles() {
+                    this.userTrackedLoading = true;
+                    let chatId = this.getChatId();
+                    try {
+                        const res = await fetch(`/api/miniapp/user/targets?chat_id=${chatId}`, {
+                            headers: { 'x-telegram-init-data': window.Telegram?.WebApp?.initData || '' }
+                        });
+                        const data = await res.json();
+                        if (data.targets) {
+                            this.userTrackedProfiles = data.targets;
+                            this.userTrackedCount = data.count || data.targets.length;
+                            this.userTrackedMax = data.max !== undefined ? data.max : (this.isAdmin ? 999999 : 5);
+                            this.calendarTrackedCount = this.userTrackedCount;
+                            if (data.is_admin !== undefined) this.isAdmin = data.is_admin;
+                        }
+                    } catch(e) {
+                        console.error('Error loading user tracked profiles', e);
+                    } finally {
+                        this.userTrackedLoading = false;
+                    }
+                },
+                openAddTrackedModal() {
+                    this.addTrackedErrorMsg = '';
+                    this.addTrackedInput = '';
+                    if (!this.isAdmin && this.userTrackedProfiles.length >= 5) {
+                        alert('Лимит 5 профилей уже исчерпан. Удалите один из активных профилей, чтобы добавить новый.');
+                        return;
+                    }
+                    this.showAddTrackedProfileModal = true;
+                },
+                async submitAddTrackedProfile() {
+                    if (!this.addTrackedInput.trim()) {
+                        this.addTrackedErrorMsg = 'Укажите хотя бы один Twitter ник или ссылку';
+                        return;
+                    }
+                    const lines = this.addTrackedInput.split(/[\r\n,]+/).map(s => s.trim()).filter(Boolean);
+                    if (!this.isAdmin) {
+                        const remaining = Math.max(0, 5 - this.userTrackedProfiles.length);
+                        if (lines.length > remaining) {
+                            this.addTrackedErrorMsg = this.lang === 'ru' 
+                                ? `Вы пытаетесь добавить ${lines.length} профилей, но свободно только ${remaining} из 5`
+                                : `You are trying to add ${lines.length} profiles, but only ${remaining} of 5 slots are free`;
+                            return;
+                        }
+                    }
+                    this.addTrackedSaving = true;
+                    this.addTrackedErrorMsg = '';
+                    let chatId = this.getChatId();
+                    try {
+                        const res = await fetch('/api/miniapp/user/targets', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-telegram-init-data': window.Telegram?.WebApp?.initData || ''
+                            },
+                            body: JSON.stringify({
+                                chat_id: chatId,
+                                urls: lines,
+                                category: this.addTrackedCategory
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            this.showAddTrackedProfileModal = false;
+                            this.addTrackedInput = '';
+                            await this.loadUserTrackedProfiles();
+                            await this.loadCalendarEvents();
+                        } else {
+                            this.addTrackedErrorMsg = data.error || (this.lang === 'ru' ? 'Ошибка при сохранении' : 'Error saving targets');
+                        }
+                    } catch (e) {
+                        this.addTrackedErrorMsg = (this.lang === 'ru' ? 'Ошибка сети: ' : 'Network error: ') + e.message;
+                    } finally {
+                        this.addTrackedSaving = false;
+                    }
+                },
+                async deleteUserTrackedProfile(profile) {
+                    const username = (profile.username || '').replace(/^@/, '').trim();
+                    if (!username) return;
+                    const confirmMsg = this.lang === 'ru' ? `Прекратить отслеживание @${username}?` : `Untrack @${username}?`;
+                    if (!confirm(confirmMsg)) return;
+                    let chatId = this.getChatId();
+                    try {
+                        const res = await fetch(`/api/miniapp/user/targets/${encodeURIComponent(username)}?chat_id=${chatId}`, {
+                            method: 'DELETE',
+                            headers: { 'x-telegram-init-data': window.Telegram?.WebApp?.initData || '' }
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            await this.loadUserTrackedProfiles();
+                            await this.loadCalendarEvents();
+                        } else {
+                            alert((this.lang === 'ru' ? 'Ошибка удаления: ' : 'Delete error: ') + (data.error || ''));
+                        }
+                    } catch (e) {
+                        alert((this.lang === 'ru' ? 'Ошибка сети: ' : 'Network error: ') + e.message);
+                    }
+                },
+                formatExpiry(expiresAt, source) {
+                    const isRu = this.lang === 'ru';
+                    if (source === 'admin' || !expiresAt) return isRu ? 'Бессрочно' : 'Unlimited';
+                    const d = new Date(expiresAt);
+                    if (isNaN(d.getTime())) return isRu ? 'до 15 дн.' : 'up to 15d';
+                    const diffMs = d.getTime() - Date.now();
+                    const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+                    const day = ('0' + d.getDate()).slice(-2);
+                    const month = ('0' + (d.getMonth() + 1)).slice(-2);
+                    if (daysLeft === 0) return isRu ? `до ${day}.${month} (истекает)` : `until ${day}.${month} (expiring)`;
+                    return isRu ? `до ${day}.${month} (${daysLeft} дн.)` : `until ${day}.${month} (${daysLeft}d)`;
+                },
+                openCollection(coll) {
+                    this.selectedCollection = coll;
+                    this.filteredCoins = this.trackedCoins.filter(c => c.collection_id === coll.id);
+                    this.currentView = 'coins';
+                    window.scrollTo(0,0);
+                },
+                async createCollection() {
+                    const name = await this.showPrompt(this.t('prompt_coll_name'), this.t('prompt_new_coll'));
+                    if (name) {
+                        await this.apiCall('/api/miniapp/collections', 'POST', { name });
+                    }
+                },
+                async setTargetChatColl(coll) {
+                    const ch = await this.showPrompt('Введите ID чата для добавления:', '');
+                    if (ch !== null && ch.trim() !== '') {
+                        let current = coll.target_chat_id ? String(coll.target_chat_id).split(',').map(s => s.trim()).filter(s => s) : [];
+                        if (!current.includes(ch.trim())) {
+                            current.push(ch.trim());
+                            await this.apiCall('/api/miniapp/collections/'+coll.id+'/chat', 'PUT', { target_chat: current.join(',') });
+                        }
+                    }
+                },
+                async removeTargetChatColl(coll, chatIdToRemove) {
+                    if (confirm('Удалить чат ' + chatIdToRemove + '?')) {
+                        let current = coll.target_chat_id ? String(coll.target_chat_id).split(',').map(s => s.trim()).filter(s => s) : [];
+                        current = current.filter(id => id !== chatIdToRemove);
+                        await this.apiCall('/api/miniapp/collections/'+coll.id+'/chat', 'PUT', { target_chat: current.join(',') });
+                    }
+                },
+                openCoin(coin) {
+                    this.selectedCoin = coin;
+                    this.selectedCoin.marketCap = '...';
+                    this.selectedCoin.fdv = '...';
+                    this.selectedCoin.vol24h = '...';
+                    this.selectedCoin.change24h = '...';
+                    const cgMap = { 'btc': 'bitcoin', 'eth': 'ethereum', 'sol': 'solana', 'arb': 'arbitrum', 'bnb': 'binancecoin', 'ton': 'the-open-network' };
+                    const cgId = cgMap[coin.ticker.toLowerCase()] || coin.ticker.toLowerCase();
+                    fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${cgId}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true`)
+                    .then(r => r.json())
+                    .then(d => {
+                        const key = Object.keys(d)[0];
+                        if (key) {
+                            this.selectedCoin.marketCap = '$' + (d[key].usd_market_cap / 1e9).toFixed(2) + 'B';
+                            this.selectedCoin.change24h = (d[key].usd_24h_change).toFixed(2) + '%';
+                            this.selectedCoin.vol24h = '$' + (d[key].usd_24h_vol / 1e6).toFixed(2) + 'M';
+                            this.selectedCoin.fdv = this.selectedCoin.marketCap;
+                            this.selectedCoin.baseline_price = d[key].usd; // update UI with live price
+                        }
+                    }).catch(e => console.error(e));
+                    this.currentView = 'coin_detail';
+                    window.scrollTo(0,0);
+                    this.$nextTick(() => { setTimeout(() => this.initChart(), 300); });
+                },
+                async initChart() {
+                    const container = document.getElementById('tv-chart');
+                    const tooltip = document.getElementById('tv-tooltip');
+                    if (!container) return;
+                    
+                    Array.from(container.children).forEach(c => {
+                        if (c.id !== 'tv-tooltip') container.removeChild(c);
+                    });
+                    
+                    const chart = LightweightCharts.createChart(container, {
+                        width: container.clientWidth,
+                        height: container.clientHeight,
+                        layout: {
+                            background: { type: 'solid', color: 'transparent' },
+                            textColor: 'rgba(255, 255, 255, 0.4)',
+                            fontFamily: 'sans-serif'
+                        },
+                        grid: {
+                            vertLines: { color: 'rgba(255, 255, 255, 0.03)' },
+                            horzLines: { color: 'rgba(255, 255, 255, 0.03)' },
+                        },
+                        crosshair: {
+                            vertLine: { color: '#baff29', width: 1, style: 2, labelBackgroundColor: '#baff29' },
+                            horzLine: { color: '#baff29', width: 1, style: 2, labelBackgroundColor: '#baff29' },
+                        },
+                        timeScale: {
+                            timeVisible: true, secondsVisible: false, borderColor: 'rgba(255,255,255,0.05)',
+                        },
+                        rightPriceScale: { borderColor: 'rgba(255,255,255,0.05)', }
+                    });
+
+                    const candleSeries = chart.addCandlestickSeries({
+                        upColor: '#baff29',
+                        downColor: '#ff4444',
+                        borderVisible: false,
+                        wickUpColor: '#baff29',
+                        wickDownColor: '#ff4444'
+                    });
+
+                    try {
+                        const symbol = this.selectedCoin.ticker.toUpperCase() + 'USDT';
+                        try {
+                            const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=15m&limit=100`);
+                            if (!res.ok) throw new Error('Binance error');
+                            const json = await res.json();
+                            const data = json.map(d => ({
+                                time: d[0] / 1000,
+                                open: parseFloat(d[1]),
+                                high: parseFloat(d[2]),
+                                low: parseFloat(d[3]),
+                                close: parseFloat(d[4])
+                            }));
+                            candleSeries.setData(data);
+                        } catch(e) {
+                            const noData = document.createElement('div');
+                            noData.style.position = 'absolute';
+                            noData.style.inset = '0';
+                            noData.style.display = 'flex';
+                            noData.style.alignItems = 'center';
+                            noData.style.justifyContent = 'center';
+                            noData.style.color = 'rgba(255,255,255,0.3)';
+                            noData.style.fontSize = '12px';
+                            noData.innerText = this.t('no_chart_data');
+                            container.appendChild(noData);
+                        }
+                    } catch(e) { console.error('Error fetching Binance data', e); }
+
+                    chart.subscribeCrosshairMove(param => {
+                        if (param.point === undefined || !param.time || param.point.x < 0 || param.point.x > container.clientWidth || param.point.y < 0 || param.point.y > container.clientHeight) {
+                            tooltip.style.display = 'none';
+                        } else {
+                            const data = param.seriesData.get(candleSeries);
+                            if (data) {
+                                tooltip.style.display = 'block';
+                                tooltip.innerHTML = `O: ${data.open}<br>H: ${data.high}<br>L: ${data.low}<br>C: ${data.close}`;
+                                tooltip.style.left = param.point.x + 15 + 'px';
+                                tooltip.style.top = param.point.y + 15 + 'px';
+                            }
+                        }
+                    });
+
+                    new ResizeObserver(entries => {
+                        if (entries.length === 0 || entries[0].target !== container) { return; }
+                        const newRect = entries[0].contentRect;
+                        chart.applyOptions({ height: newRect.height, width: newRect.width });
+                    }).observe(container);
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
+

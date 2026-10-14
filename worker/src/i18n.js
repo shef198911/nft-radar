@@ -50,12 +50,14 @@ export const i18n = {
     btn_yes_delete: "❌ Да, удалить",
     deleted: "✅ <b>Коллекция удалена</b>\n\n{name} больше не отслеживается.",
     active_alerts_title: "🔔 <b>Активные алерты</b>\n\nВсего: {total}\n\n",
-    trigger_msg: "🚨 <b>Изменение Floor Price</b>\n\n🖼 {name}\n\nFloor: {old} ETH → {new} ETH\n{icon} Изменение: {percent}%\nПорог алерта: ±{threshold}\n\n────────────────\n\nТекущий Floor: {new} ETH\nЗа 24ч: {change24h}%\n\n⏱ {time}",
+    trigger_msg: "{emoji} <b>{name}</b>\n\n{trend} Изменение: <b>{percent}% ({usd_diff})</b>\n\n🏷 Floor Price: <b>{new} ETH</b> ({usd_price})\n📊 Базовая цена: {old} ETH\n⚡ Порог: ±{threshold}\n{floor_extra}\n🕐 {time}",
+    coin_trigger_msg: "{emoji} <b>{name}</b> изменился на <b>{percent}% ({usd_diff})</b>! Текущая цена: {new} {trend}\n{chart_link}",
     settings_title: "⚙️ <b>Настройки</b>",
     btn_lang: "🌐 Язык",
     btn_reset: "🗑 Сбросить настройки",
     how_it_works: "📖 <b>Как это работает</b>\n\n1️⃣ Добавьте NFT-коллекцию по ссылке.\n2️⃣ Укажите порог изменения, при котором хотите получить уведомление.\n3️⃣ Бот автоматически отслеживает Floor Price.\n4️⃣ При достижении установленного порога вы получите уведомление.\n\nПример:\nFloor: 1 ETH\nПорог: ±5%\n\nАлерт при:\n↑ 1.05 ETH\n↓ 0.95 ETH",
-    time_never: "никогда"
+    time_never: "никогда",
+    btn_view_chart: "График"
   },
   en: {
     start: "Выберите язык / Choose language:",
@@ -103,19 +105,21 @@ export const i18n = {
     btn_yes_delete: "❌ Yes, delete",
     deleted: "✅ <b>Collection deleted</b>\n\n{name} is no longer tracked.",
     active_alerts_title: "🔔 <b>Active Alerts</b>\n\nTotal: {total}\n\n",
-    trigger_msg: "🚨 <b>Floor Price Change</b>\n\n🖼 {name}\n\nFloor: {old} ETH → {new} ETH\n{icon} Change: {percent}%\nAlert threshold: ±{threshold}\n\n────────────────\n\nCurrent Floor: {new} ETH\n24h: {change24h}%\n\n⏱ {time}",
+    trigger_msg: "{emoji} <b>{name}</b>\n\n{trend} Change: <b>{percent}% ({usd_diff})</b>\n\n🏷 Floor Price: <b>{new} ETH</b> ({usd_price})\n📊 Baseline: {old} ETH\n⚡ Threshold: ±{threshold}\n{floor_extra}\n🕐 {time}",
+    coin_trigger_msg: "{emoji} <b>{name}</b> changed by <b>{percent}% ({usd_diff})</b>! Current price: {new} {trend}\n{chart_link}",
     settings_title: "⚙️ <b>Settings</b>",
     btn_lang: "🌐 Language",
     btn_reset: "🗑 Reset Settings",
     how_it_works: "📖 <b>How it works</b>\n\n1️⃣ Add an NFT collection via link.\n2️⃣ Set a threshold for notifications.\n3️⃣ The bot monitors Floor Price automatically.\n4️⃣ You get notified when the threshold is reached.\n\nExample:\nFloor: 1 ETH\nThreshold: ±5%\n\nAlert at:\n↑ 1.05 ETH\n↓ 0.95 ETH",
-    time_never: "never"
+    time_never: "never",
+    btn_view_chart: "Chart"
   }
 };
 
 export function t(lang, key, params = {}) {
   let str = i18n[lang]?.[key] || i18n.en[key] || key;
   for (const [k, v] of Object.entries(params)) {
-    str = str.replace(`{${k}}`, v);
+    str = str.replaceAll(`{${k}}`, String(v));
   }
   return str;
 }

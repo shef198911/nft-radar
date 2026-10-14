@@ -1,0 +1,32 @@
+{
+  "dependencies": {
+    "@google/genai": "^2.24.0",
+    "better-sqlite3": "^13.0.3",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "grammy": "^1.46.0",
+    "jsdom": "^29.1.1",
+    "node-cron": "^4.6.0",
+    "node-fetch": "^3.3.2",
+    "node-telegram-bot-api": "^2.1.0",
+    "ssh2": "^1.17.0"
+  },
+  "name": "nft-radar",
+  "version": "1.0.0",
+  "main": "vps_server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shef198911/nft-radar.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/shef198911/nft-radar/issues"
+  },
+  "homepage": "https://github.com/shef198911/nft-radar#readme",
+  "description": ""
+}
